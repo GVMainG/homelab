@@ -28,6 +28,21 @@ if [[ ! -d "${CONFIG_SRC}" ]]; then
   exit 1
 fi
 
+# ──────────────────────────────── Временный DNS для apt ─────────────────────
+# resolv.conf — это symlink на /run/systemd/resolve/stub-resolv.conf (127.0.0.53).
+# Перед остановкой resolved нужно прописать реальный upstream, иначе apt
+# не сможет резолвить зеркала.
+echo "==> Подготовка временного DNS..."
+DNS_FIRST=$(echo "${DNS_UPSTREAMS}" | awk '{print $1}')
+rm -f /etc/resolv.conf
+cat > /etc/resolv.conf <<EOF
+# Временный DNS до запуска dnsmasq
+nameserver ${DNS_FIRST}
+nameserver 127.0.0.1
+options timeout:2 attempts:3
+EOF
+echo "   Временный nameserver: ${DNS_FIRST}"
+
 # ──────────────────────────────── Остановка systemd-resolved ────────────────
 echo "==> Остановка и маскировка systemd-resolved (конфликт с портом 53)..."
 if systemctl is-active --quiet systemd-resolved 2>/dev/null; then
@@ -37,10 +52,6 @@ if systemctl is-active --quiet systemd-resolved 2>/dev/null; then
 else
   echo "   systemd-resolved не активен — пропуск."
 fi
-
-# Сброс resolv.conf на стандартный (убираем symlink на stub)
-rm -f /etc/resolv.conf
-echo "nameserver 127.0.0.1" > /etc/resolv.conf
 
 # ──────────────────────────────── Установка dnsmasq ────────────────────────
 echo "==> Установка dnsmasq..."
