@@ -1,0 +1,19 @@
+# Nginx Proxy Manager — Docker Compose v2
+# Запуск: docker compose up -d
+services:
+  npm:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: nginx-proxy-manager
+    restart: unless-stopped
+    ports:
+      - "80:80"       # HTTP (LetsEncrypt challenge + redirect)
+      - "81:81"       # Web UI NPM
+      - "443:443"     # HTTPS (SSL-терминация)
+    environment:
+      TZ: Europe/Moscow
+    volumes:
+      - ./data/npm:/data
+      - ./data/letsencrypt:/etc/letsencrypt
+    # bridge-сеть по умолчанию — стабильнее host-network для NPM
+    networks:
+      - default
