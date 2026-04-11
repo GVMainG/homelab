@@ -56,7 +56,14 @@ fi
 # ──────────────────────────────── Установка dnsmasq ────────────────────────
 echo "==> Установка dnsmasq..."
 apt-get update -qq
-apt-get install -y -qq dnsmasq
+if ! apt-get install -y -qq dnsmasq; then
+  echo "❌ Ошибка установки dnsmasq. Проверьте:"
+  echo "   1. Интернет-соединение (ping 1.1.1.1)"
+  echo "   2. DNS (ping github.com)"
+  echo "   3. /etc/resolv.conf: nameserver ${DNS_FIRST}"
+  exit 1
+fi
+echo "   dnsmasq установлен."
 
 # ──────────────────────────────── Подготовка конфигов ──────────────────────
 DNSMASQ_D="/etc/dnsmasq.d"
