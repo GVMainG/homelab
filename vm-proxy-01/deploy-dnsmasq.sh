@@ -5,7 +5,7 @@ set -euo pipefail
 
 # ──────────────────────────────── Переменные ────────────────────────────────
 PROXY_IP="192.168.1.50"
-LAN_IFACE="eth0"
+LAN_IFACE=""           # Автоопределение ниже (или задать вручную: eth0, ens18...)
 DNS_UPSTREAMS="1.1.1.1 8.8.8.8"
 TARGET_DOMAIN="host.loc"
 LAN_SUBNET="192.168.1.6/24"
@@ -26,6 +26,22 @@ echo "==> Рабочая директория: ${SCRIPT_DIR}"
 if [[ ! -d "${CONFIG_SRC}" ]]; then
   echo "Ошибка: не найдена директория с конфигами ${CONFIG_SRC}"
   exit 1
+fi
+
+# ──────────────────────────────── Автоопределение интерфейса ────────────────
+if [[ -z "${LAN_IFACE}" ]]; then
+  LAN_IFACE=$(ip -br addr show 2>/dev/null | awk '$2 == "UP" && $1 != "lo" {print $1; exit}')
+  if [[ -z "${LAN_IFACE}" ]]; then
+    # Fallback: первый интерфейс, кроме lo
+    LAN_IFACE=$(ip -br addr show 2>/dev/null | awk '$1 != "lo" {print $1; exit}')
+  fi
+  if [[ -z "${LAN_IFACE}" ]]; then
+    echo "❌ Не удалось определить сетевой интерфейс. Укажите LAN_IFACE вручную."
+    exit 1
+  fi
+  echo "==> Определён интерфейс: ${LAN_IFACE}"
+else
+  echo "==> Используем заданный интерфейс: ${LAN_IFACE}"
 fi
 
 # ──────────────────────────────── Временный DNS для apt ─────────────────────
@@ -115,7 +131,7 @@ echo ""
 echo "=============================================="
 echo "       ИТОГОВАЯ СВОДКА"
 echo "=============================================="
-echo "VM IP          : 192.168.1.50 (статический)"
+echo "VM IP          : $(ip -4 -br addr show "${LAN_IFACE}" 2>/dev/null | awk '{print $3}' || 'N/A') (статический)"
 echo "Интерфейс      : ${LAN_IFACE}"
 echo "DNS-порт       : 53 (UDP/TCP)"
 echo "Upstream DNS   : ${DNS_UPSTREAMS}"
