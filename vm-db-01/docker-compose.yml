@@ -1,0 +1,96 @@
+# vm-db-01 — PostgreSQL + Vaultwarden + pgAdmin
+# Запуск: docker compose up -d
+services:
+  # ───────────────────────── PostgreSQL ─────────────────────────
+  postgres:
+    image: postgres:16.4
+    container_name: db-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      # Ограничиваем подключения только из доверенных подсетей
+      PGHOST: "*"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"  # localhost — только для pg_dump с хоста
+    networks:
+      - db-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ───────────────────────── Vaultwarden ────────────────────────
+  vaultwarden:
+    image: vaultwarden/server:1.32.5
+    container_name: db-vaultwarden
+    restart: unless-stopped
+    environment:
+      # Админ-панель отключена — управление через переменные/API
+      ENABLE_ADMIN_PAGE: "true"
+      # Открытая регистрация закрыта (учётки создаёт админ)
+      SIGNUPS_ALLOWED: "true"
+      WEBSOCKET_ENABLED: "true"
+      DOMAIN: "http://192.168.1.51:8081"
+    volumes:
+      - vw_data:/data
+    ports:
+      - "0.0.0.0:8081:80"  # LAN-доступ; firewall обязателен
+    networks:
+      - db-internal
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/alive || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ───────────────────────── pgAdmin ────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:8.12
+    container_name: db-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      # Мастер-пароль отключён — аутентификация через учётку выше
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+      # Предзаполненный сервер из servers.json
+      PGADMIN_SERVER_JSON_FILE: "/pgadmin4/servers.json"
+      PGADMIN_CONFIG_SERVER_MODE: "True"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - ./pgadmin/pgpass:/pgadmin4/pgpass:ro
+    ports:
+      - "0.0.0.0:5050:80"  # LAN-доступ; firewall обязателен
+    networks:
+      - db-internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # /misc/ping возвращает 200 без аутентификации (pgAdmin 8.x)
+      test: ["CMD-SHELL", "curl -f -s http://localhost:80/misc/ping > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# ────────────────────────── Сеть ─────────────────────────────────
+networks:
+  db-internal:
+    driver: bridge
+    # Изоляция от других compose-проектов на хосте.
+    # outbound internet разрешён (Vaultwarden sync, apt-обновления).
+
+# ────────────────────────── Хранилище ────────────────────────────
+volumes:
+  pg_data:       # PostgreSQL WAL, таблицы — управляется Docker
+  vw_data:       # Vaultwarden SQLite (data/vaultwarden.db)
+  pgadmin_data:  # pgAdmin сессии, настройки
