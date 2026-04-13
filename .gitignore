@@ -1,0 +1,14 @@
+# Secrets — never commit
+.env
+*/.env
+
+# SSL certificates (generated locally)
+vm-proxy-02/ssl/certs/
+
+# PostgreSQL backups (stored on VM)
+backups/
+*/backups/
+
+# pgAdmin runtime configs
+pgadmin/
+*/pgadmin/
