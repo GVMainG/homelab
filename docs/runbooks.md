@@ -49,30 +49,35 @@
 **Шаги:**
 
 1. SSH на нужную VM:
+
    ```bash
    ssh user-home@192.168.1.36   # vm-db-02
    ssh user-home@192.168.1.37   # vm-proxy-02
    ```
 
 2. Перейти в директорию homelab и запустить sync:
+
    ```bash
    cd /opt/homelab
    bash vm-db-02/sync.sh   # или vm-proxy-02/sync.sh
    ```
 
 3. Обновить Docker-образы и перезапустить:
+
    ```bash
    cd vm-db-02   # или vm-proxy-02
    docker compose pull && docker compose up -d --remove-orphans
    ```
 
 **Проверка:**
+
 ```bash
 docker compose ps    # все сервисы должны быть Up/healthy
 git status           # без локальных изменений
 ```
 
 **Откат:**
+
 ```bash
 git checkout -- .    # отменить локальные изменения
 docker compose down  # остановить, если что-то сломалось
@@ -104,6 +109,7 @@ docker compose down  # остановить, если что-то сломало
 3. Закоммитить изменения, сделать push.
 
 4. На VM:
+
    ```bash
    bash vm-db-02/sync.sh
    cd vm-db-02
@@ -119,12 +125,14 @@ docker compose down  # остановить, если что-то сломало
 6. Настроить reverse proxy в NPM UI (`http://192.168.1.37:81`).
 
 **Проверка:**
+
 ```bash
 docker compose ps              # новый сервис в статусе Up/healthy
 curl http://192.168.1.36:PORT  # сервис отвечает
 ```
 
 **Откат:**
+
 ```bash
 docker compose rm -sf <service>   # удалить контейнер
 # Удалить секцию из docker-compose.yml, sync, docker compose up -d
@@ -141,21 +149,25 @@ docker compose rm -sf <service>   # удалить контейнер
 **Шаги:**
 
 1. SSH на vm-db-02:
+
    ```bash
    ssh user-home@192.168.1.36
    ```
 
 2. Создать бэкап:
+
    ```bash
    docker exec postgres pg_dumpall -U admin > /opt/homelab/backups/full-$(date +%Y%m%d-%H%M%S).sql
    ```
 
 3. Проверить размер файла:
+
    ```bash
    ls -lh /opt/homelab/backups/
    ```
 
 **Проверка:** Файл бэкапа существует, размер > 0, можно восстановить:
+
 ```bash
 head -5 /opt/homelab/backups/full-YYYYMMDD.sql
 ```
@@ -173,21 +185,26 @@ head -5 /opt/homelab/backups/full-YYYYMMDD.sql
 **Шаги:**
 
 1. SSH на vm-proxy-02:
+
    ```bash
    ssh user-home@192.168.1.37
    cd /opt/homelab/vm-proxy-02
    ```
 
 2. Остановить NPM:
+
    ```bash
    docker compose down
    ```
 
 3. Сбросить пароль через SQLite (NPM хранит в `/data/database.sqlite`):
+
    ```bash
    docker run --rm -v npm-data:/data alpine sh -c "apk add sqlite && sqlite3 /data/database.sqlite \"UPDATE user SET password='\\$argon2id\\$v=19\\$m=65536,t=3,p=4\\$...' WHERE email='admin@home.loc';\""
    ```
+
    **ИЛИ** проще — удалить БД и пересоздать (потеря конфигов proxy):
+
    ```bash
    docker volume rm vm-proxy-02_npm-data
    docker compose up -d
@@ -200,6 +217,101 @@ head -5 /opt/homelab/backups/full-YYYYMMDD.sql
 
 ---
 
+## Обновление самоподписанного SSL-сертификата *.home.loc
+
+**Когда применять:** Сертификат просрочен или истекает. Проверить дату: NPM UI → SSL Certificates, или `openssl x509 -in /opt/homelab/vm-proxy-02/ssl/certs/cert.pem -noout -dates`.
+
+**Предусловия:** Доступ к vm-proxy-02, доступ к Windows PC для обновления CA (если изменился CA).
+
+**Примерное время:** 15-20 минут
+
+**Шаги:**
+
+1. SSH на vm-proxy-02:
+
+   ```bash
+   ssh user-home@192.168.1.37
+   cd /opt/homelab/vm-proxy-02/ssl
+   ```
+
+2. Перегенерировать сертификат:
+
+   ```bash
+   bash generate-ssl.sh
+   # Создаёт новые файлы в ./certs/: ca.key, ca.crt, cert.key, cert.crt, fullchain.pem
+   ```
+
+3. Скопировать новые файлы в Docker volume NPM:
+
+   ```bash
+   docker run --rm \
+     -v /opt/homelab/vm-proxy-02/ssl/certs:/src \
+     -v vm-proxy-02_npm-data:/data \
+     alpine sh -c "
+       mkdir -p /data/custom_ssl/npm-1
+       cp /src/fullchain.pem /data/custom_ssl/npm-1/fullchain.pem
+       cp /src/cert.key      /data/custom_ssl/npm-1/privkey.pem
+     "
+   ```
+
+4. Обновить метаданные в SQLite-базе NPM:
+
+   ```bash
+   # Получить реальную дату из нового сертификата
+   NEW_EXPIRY=$(openssl x509 -in /opt/homelab/vm-proxy-02/ssl/certs/cert.crt -noout -enddate | cut -d= -f2)
+   echo "New expiry: $NEW_EXPIRY"
+
+   cat > /tmp/fix_cert.py << 'PYEOF'
+   import sqlite3, sys
+   expiry = sys.argv[1]   # формат: Apr 11 09:35:36 2036 GMT
+   from datetime import datetime
+   dt = datetime.strptime(expiry, "%b %d %H:%M:%S %Y %Z")
+   formatted = dt.strftime("%Y-%m-%d %H:%M:%S")
+   conn = sqlite3.connect("/data/database.sqlite")
+   cur = conn.cursor()
+   cur.execute("UPDATE certificate SET expires_on = ? WHERE id = 1", (formatted,))
+   conn.commit()
+   print("Updated expires_on to:", formatted)
+   conn.close()
+   PYEOF
+
+   docker run --rm \
+     -v vm-proxy-02_npm-data:/data \
+     -v /tmp/fix_cert.py:/tmp/fix_cert.py \
+     python:3-alpine python3 /tmp/fix_cert.py "$NEW_EXPIRY"
+   ```
+
+5. Перезагрузить nginx и перезапустить NPM:
+
+   ```bash
+   docker exec npm nginx -s reload
+   cd /opt/homelab/vm-proxy-02
+   docker compose restart npm
+   ```
+
+6. Если изменился CA (перегенерирован ca.key/ca.crt) — обновить CA на Windows PC:
+   - Скопировать `ca.crt` с VM: `scp user-home@192.168.1.37:/opt/homelab/vm-proxy-02/ssl/certs/ca.crt C:\Users\GV\Downloads\homelab-ca.crt`
+   - Удалить старый CA и установить новый (PowerShell Administrator):
+
+     ```powershell
+     # Удалить старый CA (найти по Subject)
+     Get-ChildItem Cert:\LocalMachine\Root | Where-Object {$_.Subject -like "*Homelab*"} | Remove-Item
+     # Установить новый
+     Import-Certificate -FilePath "C:\Users\GV\Downloads\homelab-ca.crt" -CertStoreLocation Cert:\LocalMachine\Root
+     ```
+
+**Проверка:**
+
+```bash
+# На VM:
+echo | openssl s_client -connect localhost:443 -servername vw.home.loc 2>&1 | openssl x509 -noout -dates
+# NPM UI: SSL Certificates → должна быть новая дата
+```
+
+**Откат:** Вернуть предыдущие файлы из backup (если сохранены). NPM хранит только один набор файлов на сертификат.
+
+---
+
 ## Добавление нового домена в dnsmasq
 
 **Когда применять:** Новый сервис needs DNS-запись вида `service.home.loc`.
@@ -209,22 +321,26 @@ head -5 /opt/homelab/backups/full-YYYYMMDD.sql
 **Шаги:**
 
 1. SSH на vm-proxy-02:
+
    ```bash
    ssh user-home@192.168.1.37
    ```
 
 2. Добавить запись в конфиг dnsmasq (файл зависит от конфигурации, обычно `/etc/dnsmasq.d/01-split-dns.conf`):
+
    ```bash
    sudo nano /etc/dnsmasq.d/01-split-dns.conf
    # Добавить: address=/newservice.home.loc/192.168.1.37
    ```
 
 3. Перезапустить dnsmasq:
+
    ```bash
    sudo systemctl restart dnsmasq
    ```
 
 **Проверка:**
+
 ```bash
 dig newservice.home.loc @192.168.1.37   # должен вернуть 192.168.1.37
 ```

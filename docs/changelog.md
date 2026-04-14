@@ -39,6 +39,25 @@
 
 ## 2026-04
 
+### 2026-04-14 — Исправлены метаданные SSL-сертификата в NPM
+
+- **Тип:** fixed
+- **VM:** vm-proxy-02
+- **Описание:** После перегенерации SSL-сертификата NPM UI показывал просроченную дату, хотя nginx реально отдавал новый сертификат. Проблема: NPM хранит `expires_on` в SQLite (`/data/database.sqlite`, таблица `certificate`), файлы заменили напрямую в volume, минуя обновление БД. Исправлено Python-скриптом через `docker run python:3-alpine`, том `vm-proxy-02_npm-data`. После обновления записи NPM перезапущен.
+
+### 2026-04-14 — Перегенерация просроченного SSL-сертификата *.home.loc
+
+- **Тип:** fixed
+- **VM:** vm-proxy-02
+- **Описание:** Истёк самоподписанный wildcard сертификат `*.home.loc` (выпущен на 1 год, просрочен 2026-04-13). Запущен `vm-proxy-02/ssl/generate-ssl.sh`, новый сертификат выпущен на 10 лет (notAfter: 2036-04-11). Файлы заменены напрямую в Docker volume `vm-proxy-02_npm-data` через alpine-контейнер, выполнен `nginx -s reload` внутри NPM. CA-сертификат установлен в Trusted Root на Windows PC (Cert:\LocalMachine\Root, thumbprint E6FB4285D74806654389F8D19554D788895F9713, expires 2036).
+
+### 2026-04-14 — Добавлен Homepage dashboard на vm-proxy-02
+
+- **Тип:** added
+- **VM:** vm-proxy-02
+- **Описание:** Развёрнут Homepage (ghcr.io/gethomepage/homepage:latest) на порту 3000. Конфиги в `vm-proxy-02/configs/homepage/` (services, widgets, settings, bookmarks, docker.yaml). NPM и Homepage объединены в сеть `proxy-net`. Исправлены IP-адреса VM во всех docs (vm-db-02: 192.168.1.52→192.168.1.36, vm-proxy-02: 192.168.1.51→192.168.1.37), исправлен SSH-пользователь (gv→user-home).
+- **Коммит:** 415a8d2
+
 ### 2026-04-14 — Добавлена документация проекта
 
 - **Тип:** added

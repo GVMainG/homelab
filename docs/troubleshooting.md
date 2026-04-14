@@ -266,6 +266,132 @@ git pull origin main
 
 ---
 
+## NPM показывает просроченный сертификат, но nginx работает корректно
+
+**Симптом:** NPM UI (SSL Certificates) показывает сертификат с просроченной датой. При этом реальный TLS на 443 работает — `openssl s_client` показывает новые даты.
+
+**Где проявляется:** vm-proxy-02
+
+**Причина:** NPM хранит метаданные сертификата (в т.ч. `expires_on`) в SQLite-базе `/data/database.sqlite` (том `vm-proxy-02_npm-data`). Если сертификатные файлы заменить напрямую в volume (минуя NPM API), база данных не обновляется.
+
+**Диагностика:**
+
+1. Проверить реальные даты сертификата, который отдаёт nginx:
+   ```bash
+   echo | openssl s_client -connect localhost:443 -servername vw.home.loc 2>&1 | openssl x509 -noout -dates
+   ```
+
+2. Проверить что в БД NPM:
+   ```bash
+   docker run --rm -v vm-proxy-02_npm-data:/data python:3-alpine python3 -c "
+   import sqlite3
+   conn = sqlite3.connect('/data/database.sqlite')
+   cur = conn.cursor()
+   cur.execute('SELECT id, nice_name, expires_on FROM certificate')
+   print(cur.fetchall())
+   conn.close()
+   "
+   ```
+
+**Решение:** Обновить `expires_on` в SQLite напрямую:
+
+```bash
+cat > /tmp/fix_cert.py << 'PYEOF'
+import sqlite3
+conn = sqlite3.connect("/data/database.sqlite")
+cur = conn.cursor()
+# Подставить реальную дату из openssl (формат: YYYY-MM-DD HH:MM:SS)
+cur.execute("UPDATE certificate SET expires_on = '2036-04-11 09:35:36' WHERE id = 1")
+conn.commit()
+print("Updated:", cur.execute("SELECT id, nice_name, expires_on FROM certificate").fetchall())
+conn.close()
+PYEOF
+
+docker run --rm \
+  -v vm-proxy-02_npm-data:/data \
+  -v /tmp/fix_cert.py:/tmp/fix_cert.py \
+  python:3-alpine python3 /tmp/fix_cert.py
+
+cd /opt/homelab/vm-proxy-02
+docker compose restart npm
+```
+
+**Профилактика:** При замене сертификата использовать NPM API (`PUT /api/nginx/certificates/{id}`) или UI — тогда БД обновляется автоматически. При ручной замене файлов — всегда обновлять БД.
+
+---
+
+## DNS *.home.loc не резолвится на Windows PC с v2rayN/sing-box
+
+**Симптом:** `https://vw.home.loc` не открывается. `nslookup vw.home.loc` возвращает `NXDOMAIN` или отвечает не тот DNS.
+
+**Где проявляется:** Windows-клиент с v2rayN (xray core + sing-box TUN mode)
+
+**Причина:** sing-box в TUN-режиме создаёт виртуальный адаптер (`singbox_tun`) и перехватывает **весь** DNS-трафик через `action: hijack-dns`. Запросы для `*.home.loc` не имеют правила с локальным DNS-сервером → уходят на внешний DNS (8.8.8.8) → `NXDOMAIN`. Смена DNS-сервера в настройках сетевого адаптера не помогает — sing-box перехватывает раньше.
+
+**Диагностика:**
+
+1. Проверить какой DNS реально используется:
+   ```powershell
+   nslookup vw.home.loc
+   # Если "Server: dns.google" или 8.8.8.8 — sing-box перехватывает
+   ```
+
+2. Проверить есть ли адаптер sing-box:
+   ```powershell
+   Get-NetAdapter | Where-Object {$_.InterfaceDescription -like "*sing*" -or $_.Name -like "*tun*"}
+   ```
+
+**Решение (постоянное):** Прописать записи в `C:\Windows\System32\drivers\etc\hosts` — hosts-файл Windows проверяется ДО DNS и НЕ перехватывается sing-box:
+
+```hosts
+192.168.1.37 vw.home.loc
+192.168.1.37 pgadmin.home.loc
+192.168.1.37 home.home.loc
+```
+
+Редактировать через PowerShell (требует прав администратора):
+
+```powershell
+# Запустить PowerShell как администратор:
+Add-Content -Path "C:\Windows\System32\drivers\etc\hosts" -Value "`n192.168.1.37 vw.home.loc`n192.168.1.37 pgadmin.home.loc`n192.168.1.37 home.home.loc"
+```
+
+**Установить CA-сертификат в Windows Trusted Root:**
+
+```powershell
+# Запустить PowerShell как администратор:
+Import-Certificate -FilePath "C:\path\to\homelab-ca.crt" -CertStoreLocation Cert:\LocalMachine\Root
+```
+
+CA-сертификат: `vm-proxy-02/ssl/certs/ca.crt` (генерируется `generate-ssl.sh`, не хранится в git — взять с VM из `/opt/homelab/vm-proxy-02/ssl/certs/ca.crt`).
+
+**Профилактика:** При добавлении нового сервиса `newservice.home.loc` — добавить строку в hosts-файл на каждом Windows-клиенте.
+
+---
+
+## Permission denied при git pull на VM (репо склонирован от root)
+
+**Симптом:** `bash sync.sh` или `git pull` на VM падает с `cannot open '.git/FETCH_HEAD': Permission denied`.
+
+**Где проявляется:** vm-db-02 или vm-proxy-02
+
+**Причина:** Репозиторий был первоначально склонирован под `root` (`sudo git clone ...`). Текущий пользователь (`user-home`) не имеет прав на запись.
+
+**Диагностика:**
+```bash
+ls -la /opt/homelab/.git/FETCH_HEAD
+# Если owner root, root — это причина
+```
+
+**Решение:**
+```bash
+sudo git pull   # один раз вручную от root
+sudo chown -R user-home:user-home /opt/homelab
+# Теперь git pull работает без sudo
+```
+
+---
+
 ## Место на диске заполнено (Docker volumes, логи)
 
 **Симптом:** `No space left on device`, Docker не запускается.
