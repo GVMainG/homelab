@@ -1,0 +1,15 @@
+title: Homelab Dashboard
+description: vm-proxy-02 homelab services
+
+theme: dark
+color: slate
+headerStyle: clean
+target: _blank
+
+layout:
+  Proxy & DNS:
+    style: row
+    columns: 2
+  Database:
+    style: row
+    columns: 3

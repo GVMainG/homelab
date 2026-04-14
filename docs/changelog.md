@@ -50,7 +50,7 @@
 
 - **Тип:** added
 - **VM:** vm-db-02, vm-proxy-02
-- **Описание:** Добавлена вторая пара VM для homelab. vm-db-02 (192.168.1.52): PostgreSQL 16, Vaultwarden, pgAdmin на сети db-net. vm-proxy-02 (192.168.1.51): Nginx Proxy Manager + dnsmasq.
+- **Описание:** Добавлена вторая пара VM для homelab. vm-db-02 (192.168.1.36): PostgreSQL 16, Vaultwarden, pgAdmin на сети db-net. vm-proxy-02 (192.168.1.37): Nginx Proxy Manager + dnsmasq.
 - **Версии:** postgres:16, vaultwarden/server:latest, dpage/pgadmin4:latest, jc21/nginx-proxy-manager:latest
 - **Коммит:** 5786f5b
 

@@ -170,8 +170,8 @@ GRANT ALL PRIVILEGES ON DATABASE vaultwarden TO vw_user;
 
 2. Проверить что upstream (целевой сервис) доступен с proxy VM:
    ```bash
-   curl http://192.168.1.52:8080/   # Vaultwarden
-   curl http://192.168.1.52:5050/   # pgAdmin
+   curl http://192.168.1.36:8080/   # Vaultwarden
+   curl http://192.168.1.36:5050/   # pgAdmin
    ```
 
 3. Проверить SSL-сертификат:
@@ -184,7 +184,7 @@ GRANT ALL PRIVILEGES ON DATABASE vaultwarden TO vw_user;
 | Причина | Решение |
 |---|---|
 | Upstream сервис (Vaultwarden) не доступен | Запустить сервис на vm-db-02, проверить фаервол |
-| Неправильный IP в Proxy Host настройках | NPM UI: проверить что Forward Hostname/IP = `192.168.1.52`, правильный порт |
+| Неправильный IP в Proxy Host настройках | NPM UI: проверить что Forward Hostname/IP = `192.168.1.36`, правильный порт |
 | SSL-сертификат истёк | Перегенерировать через NPM UI или `ssl/generate-ssl.sh` |
 | Блок-лист IP / Access List | Проверить NPM UI: Proxy Host → Access List |
 
@@ -192,7 +192,7 @@ GRANT ALL PRIVILEGES ON DATABASE vaultwarden TO vw_user;
 
 ## dnsmasq не резолвит локальные домены
 
-**Симптом:** `dig vw.home.loc @192.168.1.51` не возвращает ответ или `NXDOMAIN`.
+**Симптом:** `dig vw.home.loc @192.168.1.37` не возвращает ответ или `NXDOMAIN`.
 
 **Где проявляется:** vm-proxy-02
 
@@ -206,7 +206,7 @@ GRANT ALL PRIVILEGES ON DATABASE vaultwarden TO vw_user;
 2. Проверить конфиг:
    ```bash
    sudo cat /etc/dnsmasq.d/*.conf
-   # Должна быть запись вида: address=/home.loc/192.168.1.51
+   # Должна быть запись вида: address=/home.loc/192.168.1.37
    ```
 
 3. Проверить что systemd-resolved остановлен:

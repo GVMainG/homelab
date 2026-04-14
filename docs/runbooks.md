@@ -50,8 +50,8 @@
 
 1. SSH на нужную VM:
    ```bash
-   ssh gv@192.168.1.52   # vm-db-02
-   ssh gv@192.168.1.51   # vm-proxy-02
+   ssh user-home@192.168.1.36   # vm-db-02
+   ssh user-home@192.168.1.37   # vm-proxy-02
    ```
 
 2. Перейти в директорию homelab и запустить sync:
@@ -113,15 +113,15 @@ docker compose down  # остановить, если что-то сломало
    ```
 
 5. Добавить запись в `dnsmasq` (если нужен домен):
-   - На vm-proxy-02: отредактировать конфиг dnsmasq, добавить `address=/newservice.home.loc/192.168.1.51`
+   - На vm-proxy-02: отредактировать конфиг dnsmasq, добавить `address=/newservice.home.loc/192.168.1.37`
    - Перезапустить: `sudo systemctl restart dnsmasq`
 
-6. Настроить reverse proxy в NPM UI (`http://192.168.1.51:81`).
+6. Настроить reverse proxy в NPM UI (`http://192.168.1.37:81`).
 
 **Проверка:**
 ```bash
 docker compose ps              # новый сервис в статусе Up/healthy
-curl http://192.168.1.52:PORT  # сервис отвечает
+curl http://192.168.1.36:PORT  # сервис отвечает
 ```
 
 **Откат:**
@@ -142,7 +142,7 @@ docker compose rm -sf <service>   # удалить контейнер
 
 1. SSH на vm-db-02:
    ```bash
-   ssh gv@192.168.1.52
+   ssh user-home@192.168.1.36
    ```
 
 2. Создать бэкап:
@@ -174,7 +174,7 @@ head -5 /opt/homelab/backups/full-YYYYMMDD.sql
 
 1. SSH на vm-proxy-02:
    ```bash
-   ssh gv@192.168.1.51
+   ssh user-home@192.168.1.37
    cd /opt/homelab/vm-proxy-02
    ```
 
@@ -194,7 +194,7 @@ head -5 /opt/homelab/backups/full-YYYYMMDD.sql
    # Войти с INITIAL_ADMIN_EMAIL/INITIAL_ADMIN_PASSWORD из .env
    ```
 
-**Проверка:** `http://192.168.1.51:81` — вход работает.
+**Проверка:** `http://192.168.1.37:81` — вход работает.
 
 **Откат:** Если удалена БД — воссоздать reverse proxy записи через UI.
 
@@ -210,13 +210,13 @@ head -5 /opt/homelab/backups/full-YYYYMMDD.sql
 
 1. SSH на vm-proxy-02:
    ```bash
-   ssh gv@192.168.1.51
+   ssh user-home@192.168.1.37
    ```
 
 2. Добавить запись в конфиг dnsmasq (файл зависит от конфигурации, обычно `/etc/dnsmasq.d/01-split-dns.conf`):
    ```bash
    sudo nano /etc/dnsmasq.d/01-split-dns.conf
-   # Добавить: address=/newservice.home.loc/192.168.1.51
+   # Добавить: address=/newservice.home.loc/192.168.1.37
    ```
 
 3. Перезапустить dnsmasq:
@@ -226,7 +226,7 @@ head -5 /opt/homelab/backups/full-YYYYMMDD.sql
 
 **Проверка:**
 ```bash
-dig newservice.home.loc @192.168.1.51   # должен вернуть 192.168.1.51
+dig newservice.home.loc @192.168.1.37   # должен вернуть 192.168.1.37
 ```
 
 **Откат:** Удалить строку из конфига, `sudo systemctl restart dnsmasq`.

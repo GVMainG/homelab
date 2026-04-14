@@ -39,7 +39,7 @@
 
 ---
 
-## vm-db-02 (192.168.1.52)
+## vm-db-02 (192.168.1.36)
 
 ### 1. Создание VM в Proxmox
 
@@ -56,7 +56,7 @@ qm start 102
 ### 2. Установка ОС
 
 - Загрузиться с ISO, установить Ubuntu Server
-- Static IP: `192.168.1.52/24`, gateway `192.168.1.1`, DNS `192.168.1.51` (proxy VM)
+- Static IP: `192.168.1.36/24`, gateway `192.168.1.1`, DNS `192.168.1.37` (proxy VM)
 - Пользователь: `gv` (или другой), настроить SSH ключ
 
 ### 3. Базовая настройка ОС
@@ -117,7 +117,7 @@ docker compose ps    # проверить что все healthy
 
 ---
 
-## vm-proxy-02 (192.168.1.51)
+## vm-proxy-02 (192.168.1.37)
 
 ### 1. Создание VM в Proxmox
 
@@ -132,7 +132,7 @@ qm start 101
 
 ### 2. Установка ОС
 
-- Static IP: `192.168.1.51/24`, gateway `192.168.1.1`, DNS `8.8.8.8` (внешний, до настройки dnsmasq)
+- Static IP: `192.168.1.37/24`, gateway `192.168.1.1`, DNS `8.8.8.8` (внешний, до настройки dnsmasq)
 
 ### 3. Базовая настройка ОС
 
@@ -160,14 +160,14 @@ sudo apt install -y dnsmasq
 # Настроить split-DNS
 sudo nano /etc/dnsmasq.d/01-split-dns.conf
 # Добавить:
-#   address=/home.loc/192.168.1.51
-#   listen-address=127.0.0.1,192.168.1.51
+#   address=/home.loc/192.168.1.37
+#   listen-address=127.0.0.1,192.168.1.37
 
 sudo systemctl enable dnsmasq
 sudo systemctl start dnsmasq
 
 # Обновить resolv.conf
-echo "nameserver 192.168.1.51" | sudo tee /etc/resolv.conf
+echo "nameserver 192.168.1.37" | sudo tee /etc/resolv.conf
 ```
 
 ### 5. Настройка git sparse checkout
@@ -192,7 +192,7 @@ docker compose up -d --remove-orphans
 docker compose ps
 ```
 
-Admin UI доступен на `http://192.168.1.51:81`.
+Admin UI доступен на `http://192.168.1.37:81`.
 
 ---
 

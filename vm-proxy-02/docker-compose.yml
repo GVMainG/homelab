@@ -14,6 +14,8 @@ services:
     volumes:
       - npm-data:/data
       - npm-letsencrypt:/etc/letsencrypt
+    networks:
+      - proxy-net
     healthcheck:
       test: ["CMD", "/usr/bin/check-health"]
       interval: 10s
@@ -21,6 +23,33 @@ services:
       retries: 5
       start_period: 60s
 
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: ${HOMEPAGE_ALLOWED_HOSTS}
+      PUID: 1000
+      PGID: 1000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./configs/homepage:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - proxy-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
 volumes:
   npm-data:
   npm-letsencrypt:
+
+networks:
+  proxy-net:
+    driver: bridge

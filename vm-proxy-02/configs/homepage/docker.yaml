@@ -1,0 +1,4 @@
+# Локальный Docker-сокет vm-proxy-02
+# Используется для отображения статуса контейнеров npm и homepage
+local-docker:
+  socket: /var/run/docker.sock
