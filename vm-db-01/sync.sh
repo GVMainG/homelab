@@ -4,7 +4,7 @@ set -euo pipefail
 
 REPO_URL="https://github.com/GVMainG/homelab.git"
 CLONE_DIR="/opt/homelab"
-SPARSE_PATH="vm-db-02"
+SPARSE_PATH="vm-db-01"
 
 if [[ -d "${CLONE_DIR}/.git" ]]; then
     echo "[sync] Repository already exists — pulling latest changes..."

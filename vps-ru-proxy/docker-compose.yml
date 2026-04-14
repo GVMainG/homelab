@@ -1,0 +1,79 @@
+# docker-compose.yml — стек обратного прокси для VPS
+#
+# Сервисы:
+#   npm      — Nginx Proxy Manager: SSL-терминация, HTTP/HTTPS проксирование
+#   npm-db   — MariaDB: внутренняя БД NPM (не публикуется за пределы proxy-net)
+#   frps     — FRP-сервер: принимает туннели от frpc на домашнем сервере
+#
+# Сеть:
+#   proxy-net (bridge) — общая изолированная сеть для всех трёх сервисов.
+#   NPM обращается к frps по имени контейнера внутри proxy-net.
+#
+# Секреты:
+#   Все пароли и токены читаются из .env (генерируется setup.sh).
+
+services:
+
+  # ── Nginx Proxy Manager ────────────────────────────────────────────────────
+  # Точка входа для HTTP/HTTPS из интернета.
+  # :80  — HTTP + Let's Encrypt HTTP-01 challenge
+  # :443 — HTTPS
+  # :81  — Веб-интерфейс администрирования NPM
+  npm:
+    image: jc21/nginx-proxy-manager:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "81:81"
+    volumes:
+      - ./npm/data:/data                      # конфиги проксей, SSL-сертификаты
+      - ./npm/letsencrypt:/etc/letsencrypt    # Let's Encrypt ACME-данные
+    depends_on:
+      npm-db:
+        condition: service_healthy
+    networks:
+      - proxy-net
+
+  # ── MariaDB для NPM ────────────────────────────────────────────────────────
+  # Внутренняя база данных NPM. Не публикуется на хост — только proxy-net.
+  # Healthcheck обязателен: npm ждёт service_healthy перед стартом.
+  npm-db:
+    image: jc21/mariadb-aria:latest
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: npm
+      MYSQL_USER: npm
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - ./npm/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - proxy-net
+
+  # ── FRP Server ─────────────────────────────────────────────────────────────
+  # Принимает входящие туннельные соединения от frpc (домашний сервер).
+  # :7000 — bind port (frpc подключается сюда для установки туннеля)
+  # :7500 — веб-дашборд (мониторинг активных туннелей)
+  # Конфиг монтируется read-only; токен подставлен setup.sh через envsubst.
+  frps:
+    image: snowdreamtech/frps:latest
+    restart: unless-stopped
+    ports:
+      - "7000:7000"
+      - "7500:7500"
+    volumes:
+      - ./frps/frps.toml:/etc/frp/frps.toml:ro
+    networks:
+      - proxy-net
+
+# ── Сети ───────────────────────────────────────────────────────────────────────
+networks:
+  proxy-net:
+    driver: bridge

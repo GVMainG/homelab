@@ -85,7 +85,8 @@
       "Bash(ssh user-home@192.168.1.37 \"docker kill stupefied_greider confident_tu thirsty_noyce gracious_shockley 2>&1; docker rm stupefied_greider confident_tu thirsty_noyce gracious_shockley 2>&1\")",
       "Bash(ssh user-home@192.168.1.37 'docker run --rm -v npm-data:/data python:3-alpine python3 -c \":*)",
       "Bash(ssh user-home@192.168.1.37 'docker run --rm -v npm-data:/data python:3-alpine sh -c \"python3 /tmp/q.py\"')",
-      "Bash(ssh user-home@192.168.1.37:*)"
+      "Bash(ssh user-home@192.168.1.37:*)",
+      "WebFetch(domain:timeweb.cloud)"
     ]
   }
 }
