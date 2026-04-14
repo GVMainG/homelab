@@ -39,6 +39,14 @@
 
 ## 2026-04
 
+### 2026-04-14 — Добавлен VPS-стек обратного прокси и frpc-клиент на vm-db-01
+
+- **Тип:** added
+- **VM:** vps-ru-proxy (новый), vm-db-01
+- **Описание:** Развёрнут стек `vps-ru-proxy/` на Timeweb VPS (Debian 12): Nginx Proxy Manager, MariaDB, frps. Сервисы объединены в сеть `proxy-net`. Развёртывание — через `deploy.ps1` (Windows) + `setup.sh` (на VPS). На vm-db-01 добавлен `frpc-setup.sh` — интерактивный скрипт настройки frpc-клиента с туннелями Vaultwarden (:8080→VPS:18080) и pgAdmin (:5050→VPS:15050). Зарегистрирован домен `gv-services.net.ru`, добавлена wildcard A-запись `*.gv-services.net.ru` → публичный IP VPS. Исправлен баг в `vm-db-01/sync.sh`: SPARSE_PATH был `vm-db-02` вместо `vm-db-01`.
+- **Версии:** `snowdreamtech/frps:latest`, `snowdreamtech/frpc:latest`, `jc21/nginx-proxy-manager:latest`, `jc21/mariadb-aria:latest`
+- **Коммит:** 62e70ae
+
 ### 2026-04-14 — Удалена proxy VM, оставлена только vm-db-01
 
 - **Тип:** removed

@@ -27,25 +27,42 @@
 ## Схема сети
 
 ```
+Internet
+   │
+   ▼
+vps-ru-proxy (публичный IP, Timeweb VPS)
+   ├── :80/:443 → Nginx Proxy Manager (SSL Let's Encrypt)
+   ├── :7000     → frps (принимает FRP-туннели от vm-db-01)
+   └── :7500     → frps веб-дашборд
+          │
+          │ FRP-туннель (исходящий от vm-db-01 → VPS:7000)
+          ▼
 LAN (192.168.1.0/24)
    │
    ▼
 vm-db-01 (192.168.1.36)
+   ├── frpc (network_mode: host) — пробрасывает порты в туннель
+   │     ├── remotePort :18080 ← localPort :8080 (Vaultwarden)
+   │     └── remotePort :15050 ← localPort :5050 (pgAdmin)
    ├── :5432 → PostgreSQL 16 (проброшен на LAN)
-   ├── :8080 → Vaultwarden (password manager)
-   └── :5050 → pgAdmin (PostgreSQL web UI)
-   └── Все три сервиса на изолированной Docker сети: db-net
+   ├── :8080 → Vaultwarden
+   └── :5050 → pgAdmin
+         └── db-net (bridge) — изолированная сеть для db-сервисов
 ```
 
-**Примечание:** Ранее использовалась пара vm-db-02 + vm-proxy-02. Сейчас вся инфраструктура — одна VM: **vm-db-01**. Обратный прокси и DNS больше не используются — сервисы доступны напрямую по IP.
+Сервисы доступны двумя путями:
+
+- **LAN напрямую:** `http://192.168.1.36:PORT`
+- **Через интернет:** через FRP-туннель → NPM → домен `*.gv-services.net.ru` (HTTPS)
 
 ## Виртуальные машины
 
 | VM | IP | ОС | Роль | Сервисы |
 |---|---|---|---|---|
-| `vm-db-01` | 192.168.1.36 | Linux | База данных + менеджмент | PostgreSQL 16, Vaultwarden (latest), pgAdmin 4 (latest) |
+| `vm-db-01` | 192.168.1.36 | Linux | База данных + менеджмент | PostgreSQL 16, Vaultwarden, pgAdmin 4, frpc |
+| `vps-ru-proxy` | публичный IP | Debian 12 (Timeweb) | Обратный прокси + FRP-сервер | NPM, MariaDB, frps |
 
-**Хост:** Proxmox VE, сеть LAN `192.168.1.0/24`
+**Хост vm-db-01:** Proxmox VE, сеть LAN `192.168.1.0/24`
 
 **Репозиторий:** https://github.com/GVMainG/homelab.git — VM использует sparse checkout (`git sparse-checkout set vm-db-01`), клонируя только свой подкаталог. Скрипт `sync.sh` автоматизирует обновление.
 
@@ -53,24 +70,29 @@ vm-db-01 (192.168.1.36)
 
 | Домен | Резолвится на | Назначение |
 |---|---|---|
-| `vw.home.loc` | 192.168.1.36 | Vaultwarden (напрямую, без reverse proxy) |
-
-**Примечание:** После удаления proxy VM wildcard DNS `*.home.loc` больше не обслуживается. Для доступа к сервисам можно использовать `C:\Windows\System32\drivers\etc\hosts` на Windows-клиентах.
+| `*.gv-services.net.ru` | публичный IP VPS | Wildcard A-запись на Timeweb |
+| `frp-ui.gv-services.net.ru` | публичный IP VPS | FRP веб-дашборд (через NPM → frps:7500) |
 
 ## Сервисы и endpoint'ы
 
-| Сервис | VM | Порт | URL | Доступ |
+| Сервис | Хост | Порт | URL | Доступ |
 |---|---|---|---|---|
-| PostgreSQL 16 | vm-db-01 | 5432 (проброшен на LAN) | `192.168.1.36:5432` | LAN |
-| Vaultwarden | vm-db-01 | 8080 | `http://192.168.1.36:8080` | LAN |
-| pgAdmin | vm-db-01 | 5050 | `http://192.168.1.36:5050` | LAN |
+| PostgreSQL 16 | vm-db-01 | 5432 | `192.168.1.36:5432` | LAN |
+| Vaultwarden | vm-db-01 | 8080 | `http://192.168.1.36:8080` | LAN / через туннель |
+| pgAdmin | vm-db-01 | 5050 | `http://192.168.1.36:5050` | LAN / через туннель |
+| Nginx Proxy Manager UI | vps-ru-proxy | 81 | `http://VPS_IP:81` | публичный |
+| frps веб-дашборд | vps-ru-proxy | 7500 | `http://VPS_IP:7500` / `https://frp-ui.gv-services.net.ru` | публичный |
 
 ## Зависимости
 
 ```
-Vaultwarden ──postgresql://──▶ PostgreSQL (vm-db-01:5432, db: vaultwarden, user: vw_user)
+Vaultwarden ──postgresql://──▶ PostgreSQL (vm-db-01, db-net, db: vaultwarden, user: vw_user)
+pgAdmin ────────────────────▶ PostgreSQL (vm-db-01, db-net)
 
-pgAdmin ────────────────────▶ PostgreSQL (vm-db-01:5432)
+frpc (vm-db-01) ──туннель──▶ frps (vps-ru-proxy, proxy-net)
+NPM (vps-ru-proxy) ────────▶ frps:7500 (proxy-net, container DNS: frps)
 
-Docker network: db-net (bridge) — объединяет все 3 сервиса на vm-db-01
+Docker networks:
+  db-net    (bridge) — vm-db-01: postgres, vaultwarden, pgadmin
+  proxy-net (bridge) — vps-ru-proxy: npm, npm-db, frps
 ```

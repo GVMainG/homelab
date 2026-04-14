@@ -210,6 +210,82 @@ sudo chown -R user-home:user-home /opt/homelab
 
 ---
 
+## NPM возвращает 503 для proxy host туннельного сервиса
+
+**Симптом:** Браузер показывает `HTTP ERROR 503` при обращении к домену через NPM. Прямой доступ по IP:PORT работает.
+
+**Где проявляется:** vps-ru-proxy (NPM → frps → frpc-туннель)
+
+**Диагностика:**
+
+1. Проверить, что все контейнеры запущены:
+
+   ```bash
+   cd /opt/vps-ru-proxy && docker compose ps
+   ```
+
+2. Проверить container-to-container связность (заменить `<npm>` на реальное имя контейнера):
+
+   ```bash
+   docker compose ps   # узнать имена контейнеров
+   docker exec <npm-container> curl -v http://frps:7500
+   ```
+
+3. Проверить настройки Proxy Host в NPM UI (`http://VPS_IP:81`):
+   - Scheme должен быть `http` (не `https`)
+   - Forward Hostname: `frps` (имя контейнера в proxy-net)
+   - Force SSL: выключить до получения сертификата
+
+**Частые причины:**
+
+| Причина | Решение |
+| --- | --- |
+| Scheme = `https` вместо `http` | NPM делает TLS к frps, frps не ожидает TLS → сменить на `http` |
+| Force SSL включён без сертификата | NPM закрывает соединение → выключить Force SSL |
+| frps не запущен | `docker compose logs frps` → перезапустить |
+| NPM не может резолвить `frps` | Оба сервиса должны быть в `proxy-net` — проверить `docker inspect` |
+
+---
+
+## Docker Hub rate limit при docker compose up
+
+**Симптом:** `docker compose up` падает с ошибкой `toomanyrequests: You have reached your pull rate limit`.
+
+**Где проявляется:** VPS при первом развёртывании или обновлении образов.
+
+**Решение:**
+
+```bash
+docker login
+# Ввести логин/пароль Docker Hub
+docker compose up -d
+```
+
+Бесплатный аккаунт Docker Hub снимает лимит анонимных pull (100 запросов/6 часов по IP).
+`setup.sh` автоматически предлагает `docker login` перед запуском стека.
+
+---
+
+## curl в PowerShell не работает с флагами (-v, -H)
+
+**Симптом:** `curl -v -H "Host: ..."` в PowerShell вызывает ошибку или неожиданное поведение.
+
+**Причина:** В PowerShell `curl` — псевдоним (`alias`) для `Invoke-WebRequest`, у которого другой синтаксис.
+
+**Решение:** Использовать `curl.exe` явно:
+
+```powershell
+curl.exe -v -H "Host: frp-ui.gv-services.net.ru" http://VPS_IP
+```
+
+Или выполнить команду через SSH на VPS:
+
+```powershell
+ssh root@VPS_IP "curl -v -H 'Host: frp-ui.gv-services.net.ru' http://127.0.0.1"
+```
+
+---
+
 ## Место на диске заполнено (Docker volumes, логи)
 
 **Симптом:** `No space left on device`, Docker не запускается.

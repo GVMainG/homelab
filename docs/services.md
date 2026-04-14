@@ -87,3 +87,60 @@
   - `start_period: 60s` — дольше прогревается, т.к. инициализирует internal БД
   - Доступен на LAN: `http://192.168.1.36:5050`
 - **Документация:** https://www.pgadmin.org/docs/pgadmin4/latest/
+
+### frpc (FRP-клиент)
+
+- **Назначение:** Создаёт исходящий туннель от vm-db-01 к frps на VPS, пробрасывая локальные порты для доступа из интернета через NPM.
+- **Образ:** `snowdreamtech/frpc:latest`
+- **Сеть:** `network_mode: host` — контейнер видит `127.0.0.1` хоста, что позволяет подключаться к Vaultwarden и pgAdmin по их локальным портам.
+- **Конфиг:** `frpc/frpc.toml` (генерируется `frpc-setup.sh`, права 600, не коммитится в git)
+- **Volumes:** `./frpc.toml:/etc/frp/frpc.toml:ro`
+- **Healthcheck:** `pgrep frpc` каждые 30с
+- **Туннели (remotePort на VPS → localPort на vm-db-01):**
+  - `18080` → `8080` (Vaultwarden)
+  - `15050` → `5050` (pgAdmin)
+- **Установка:** `sudo bash vm-db-01/frpc-setup.sh` — интерактивный скрипт, запрашивает IP VPS, токен, порты.
+- **Документация:** [github.com/fatedier/frp](https://github.com/fatedier/frp)
+
+---
+
+## vps-ru-proxy (Timeweb VPS, Debian 12)
+
+Стек развёртывается скриптом `vps-ru-proxy/setup.sh`. Конфиги и образы — в `vps-ru-proxy/`.
+
+### Nginx Proxy Manager
+
+- **Назначение:** SSL-терминация (Let's Encrypt), HTTP/HTTPS reverse proxy по доменным именам.
+- **Образ:** `jc21/nginx-proxy-manager:latest`
+- **Порты:** `80:80`, `443:443`, `81:81` (UI администрирования)
+- **Сеть:** `proxy-net` (bridge)
+- **Volumes:** `./npm/data:/data`, `./npm/letsencrypt:/etc/letsencrypt`
+- **Зависимости:** `depends_on: npm-db (condition: service_healthy)`
+- **Особенности:**
+  - Первый вход: `admin@example.com` / `changeme` — сменить сразу.
+  - Proxy Host для туннельных сервисов: Scheme `http`, Forward Hostname — имя контейнера `frps`, WebSockets включить для Vaultwarden.
+  - `Force SSL` включать только после получения сертификата Let's Encrypt.
+- **Документация:** [nginxproxymanager.com](https://nginxproxymanager.com/guide/)
+
+### MariaDB (npm-db)
+
+- **Назначение:** Внутренняя БД Nginx Proxy Manager. Не публикуется на хост.
+- **Образ:** `jc21/mariadb-aria:latest`
+- **Сеть:** `proxy-net` (bridge)
+- **Переменные окружения:** `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE=npm`, `MYSQL_USER=npm`, `MYSQL_PASSWORD` — из `.env` (генерируется setup.sh).
+- **Volumes:** `./npm/mysql:/var/lib/mysql`
+- **Healthcheck:** `mysqladmin ping -h localhost` каждые 10с
+
+### frps (FRP-сервер)
+
+- **Назначение:** Принимает входящие туннельные соединения от frpc на vm-db-01.
+- **Образ:** `snowdreamtech/frps:latest`
+- **Порты:** `7000:7000` (bind port для frpc), `7500:7500` (веб-дашборд)
+- **Сеть:** `proxy-net` (bridge)
+- **Конфиг:** `frps/frps.toml` (генерируется из шаблона `frps.toml` через `envsubst` в setup.sh; содержит токен — не коммитить).
+- **Volumes:** `./frps/frps.toml:/etc/frp/frps.toml:ro`
+- **Переменные:** `FRP_TOKEN`, `FRP_DASHBOARD_PASSWORD` — из `.env`.
+- **Особенности:**
+  - Веб-дашборд доступен напрямую по `http://VPS_IP:7500` и через NPM как `https://frp-ui.gv-services.net.ru`.
+  - При проксировании через NPM Forward Hostname = `frps` (container DNS в proxy-net), Scheme = `http`.
+- **Документация:** [github.com/fatedier/frp](https://github.com/fatedier/frp)

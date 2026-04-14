@@ -40,6 +40,110 @@
 
 ---
 
+## Развёртывание VPS-стека (vps-ru-proxy)
+
+**Когда применять:** Первичная установка на новом VPS или полная переустановка.
+
+**Предусловия:** Windows ПК с OpenSSH, VPS на Debian 12 с SSH-доступом от root.
+
+**Шаги:**
+
+1. На Windows — скопировать файлы и запустить setup.sh:
+
+   ```powershell
+   cd C:\путь\к\homelab
+   .\vps-ru-proxy\deploy.ps1
+   # Скрипт интерактивно запросит IP VPS, пользователя, SSH-ключ
+   # На вопрос "Запустить setup.sh?" ответить Y
+   ```
+
+2. setup.sh выполнит на VPS: apt upgrade, установку Docker, генерацию `.env` (токен FRP, пароли MariaDB), настройку frps из шаблона, fail2ban, запуск `docker compose up -d`.
+
+3. После завершения setup.sh запишет вывод — сохранить `FRP_TOKEN` и `FRP_DASHBOARD_PASSWORD`.
+
+**Проверка:**
+
+```bash
+ssh root@VPS_IP "cd /opt/vps-ru-proxy && docker compose ps"
+# Все сервисы: npm (healthy), npm-db (healthy), frps (Up)
+# NPM UI: http://VPS_IP:81
+# frps dashboard: http://VPS_IP:7500
+```
+
+**Откат:** `docker compose down` на VPS. Удалить `/opt/vps-ru-proxy`.
+
+---
+
+## Настройка frpc на vm-db-01
+
+**Когда применять:** Подключение vm-db-01 к VPS-туннелю после развёртывания vps-ru-proxy.
+
+**Предусловия:** VPS-стек запущен, известны IP VPS и FRP_TOKEN (из вывода setup.sh или `/opt/vps-ru-proxy/.env`).
+
+**Шаги:**
+
+1. SSH на vm-db-01:
+
+   ```bash
+   ssh user-home@192.168.1.36
+   cd /opt/homelab
+   ```
+
+2. Запустить интерактивный скрипт:
+
+   ```bash
+   sudo bash vm-db-01/frpc-setup.sh
+   # Ввести: IP VPS, FRP_TOKEN, порты (дефолты: 7000, 18080, 15050)
+   ```
+
+3. Скрипт создаст `vm-db-01/frpc/frpc.toml` (права 600) и `frpc/docker-compose.yml`, запустит контейнер.
+
+**Проверка:**
+
+```bash
+docker compose -f /opt/homelab/vm-db-01/frpc/docker-compose.yml ps
+docker compose -f /opt/homelab/vm-db-01/frpc/docker-compose.yml logs -f
+# На VPS: http://VPS_IP:7500 — в дашборде должны появиться активные туннели
+```
+
+**Откат:** `docker compose -f frpc/docker-compose.yml down`
+
+---
+
+## Добавление нового Proxy Host в NPM
+
+**Когда применять:** Нужно опубликовать новый сервис через домен.
+
+**Предусловия:** DNS A-запись на VPS_IP уже настроена, сервис запущен.
+
+**Шаги:**
+
+1. Открыть NPM: `http://VPS_IP:81`
+
+2. Proxy Hosts → Add Proxy Host:
+   - **Domain Names:** `subdomain.gv-services.net.ru`
+   - **Scheme:** `http`
+   - **Forward Hostname:** имя контейнера на proxy-net (например `frps`) или `127.0.0.1` для сервисов на хосте
+   - **Forward Port:** порт сервиса
+   - **WebSockets Support:** включить для Vaultwarden
+
+3. Вкладка **SSL**:
+   - SSL Certificate → Request a new SSL Certificate
+   - Force SSL: включить только после успешного получения сертификата
+   - Email для Let's Encrypt: указать реальный
+
+4. Сохранить. NPM автоматически получит сертификат через HTTP-01 challenge.
+
+**Проверка:** Открыть `https://subdomain.gv-services.net.ru` — сертификат валиден, сервис отвечает.
+
+**Типичные ошибки:**
+
+- **502/503** — NPM не может достучаться до upstream. Проверить: `docker exec <npm-container> curl http://<hostname>:<port>`
+- **DNS не резолвится** — ждать TTL (обычно 5–60 мин после добавления A-записи)
+- **Let's Encrypt rate limit** — максимум 5 cert на домен/час; при ошибке подождать
+
+---
+
 ## Обновление конфигурации из репозитория
 
 **Когда применять:** После изменения конфигов в git, перед перезапуском сервисов.
