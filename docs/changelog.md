@@ -34,3 +34,64 @@
 - При обновлении версии сервиса — указывать старую и новую версию
 - При проблемах и rollback — фиксировать обе операции
 - Ссылаться на коммиты в git, если изменение зафиксировано в репозитории
+
+---
+
+## 2026-04
+
+### 2026-04-14 — Добавлена документация проекта
+
+- **Тип:** added
+- **VM:** all
+- **Описание:** Создана полная документация в `docs/`: overview, services, changelog, decisions, runbooks, troubleshooting, vm-setup. Обновлён `QWEN.md`.
+- **Коммит:** 1fa026e
+
+### 2026-04-14 — Развёрнуты vm-db-02 и vm-proxy-02
+
+- **Тип:** added
+- **VM:** vm-db-02, vm-proxy-02
+- **Описание:** Добавлена вторая пара VM для homelab. vm-db-02 (192.168.1.52): PostgreSQL 16, Vaultwarden, pgAdmin на сети db-net. vm-proxy-02 (192.168.1.51): Nginx Proxy Manager + dnsmasq.
+- **Версии:** postgres:16, vaultwarden/server:latest, dpage/pgadmin4:latest, jc21/nginx-proxy-manager:latest
+- **Коммит:** 5786f5b
+
+### 2026-04-14 — Добавлен QWEN.md
+
+- **Тип:** added
+- **VM:** all
+- **Описание:** Добавлен файл контекста для Qwen Code с описанием структуры репозитория.
+- **Коммит:** 98fe0f1
+
+### 2026-04-14 — Исправлена настройка DNS на vm-proxy-01
+
+- **Тип:** fixed
+- **VM:** vm-proxy-01
+- **Описание:** Прописан временный DNS перед остановкой systemd-resolved.
+- **Коммит:** 664f035
+
+### 2026-04-14 — Добавлен sync.sh для vm-proxy-01
+
+- **Тип:** added
+- **VM:** vm-proxy-01
+- **Описание:** Скрипт `sync.sh` автоматизирует git sparse checkout обновление.
+- **Коммит:** 1dd9447
+
+### 2026-04-14 — Добавлены Split-DNS и NPM на vm-proxy-01
+
+- **Тип:** added
+- **VM:** vm-proxy-01
+- **Описание:** Развёрнуты dnsmasq (split-DNS для *.home.loc) и Nginx Proxy Manager.
+- **Коммит:** 4be87ae
+
+### 2025-xx-xx — Развёрнута vm-db-01 (legacy)
+
+- **Тип:** added
+- **VM:** vm-db-01
+- **Описание:** Первая VM с PostgreSQL 16.4, Vaultwarden 1.32.5, pgAdmin 8.12. Сервисы на сети db-internal.
+- **Версии:** postgres:16.4, vaultwarden/server:1.32.5, dpage/pgadmin4:8.12
+- **Коммит:** c50b00e
+
+### 2025-xx-xx — Развёрнута vm-proxy-01 (legacy)
+
+- **Тип:** added
+- **VM:** vm-proxy-01
+- **Описание:** Первая proxy VM с dnsmasq и Nginx Proxy Manager. IP: 192.168.1.50

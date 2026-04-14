@@ -39,3 +39,263 @@
 - После решения — указывать, в какой версии/конфигурации проблема воспроизводилась
 - Обновлять при каждом новом инциденте — даже если решение было найдено «на лету»
 - Ссылаться на этот документ из `runbooks.md`, если по проблеме есть готовый runbook
+
+---
+
+## Сервис не стартует (docker compose up падает)
+
+**Симптом:** `docker compose up -d` завершается с ошибкой, контейнер в статусе `Exit` или `Created`.
+
+**Диагностика:**
+
+1. Посмотреть статус сервисов:
+   ```bash
+   docker compose ps -a
+   ```
+
+2. Посмотреть логи проблемного сервиса:
+   ```bash
+   docker compose logs <service>
+   ```
+
+3. Проверить зависимости:
+   ```bash
+   docker compose ps postgres   # зависит ли сервис от PostgreSQL?
+   ```
+
+**Частые причины:**
+
+| Причина | Решение |
+|---|---|
+| `.env` файл отсутствует | `cp .env.example .env` и заполнить |
+| Переменная в `.env` пустая | Проверить все `CHANGE_ME` значения |
+| Порт уже занят другой программой | `sudo lsof -i :PORT` найти конфликт, остановить или сменить порт |
+| Volume не создан | `docker compose up -d` создаёт автоматически, проверить `docker volume ls` |
+| Healthcheck зависшего контейнера fails | `docker compose restart <dependency>` |
+
+---
+
+## PostgreSQL не принимает подключения
+
+**Симптом:** Vaultwarden или pgAdmin не могут подключиться к БД, ошибка `connection refused` или `authentication failed`.
+
+**Где проявляется:** vm-db-02
+
+**Диагностика:**
+
+1. Проверить что PostgreSQL запущен:
+   ```bash
+   docker compose ps postgres
+   docker compose logs postgres | tail -20
+   ```
+
+2. Проверить healthcheck:
+   ```bash
+   docker exec postgres pg_isready -U admin -d postgres
+   ```
+
+3. Проверить логи на предмет init-scripts:
+   ```bash
+   docker compose logs postgres | grep -i "init\|sql\|vw_user\|vaultwarden"
+   ```
+
+**Частые причины:**
+
+| Причина | Решение |
+|---|---|
+| Init-скрипты не выполнились (первый старт с ошибками) | Удалить volume: `docker volume rm vm-db-02_postgres-data`, перезапустить |
+| Неправильный `DATABASE_URL` в Vaultwarden | Проверить `.env`: `DATABASE_URL=postgresql://vw_user:PASSWORD@postgres:5432/vaultwarden` |
+| Пользователь `vw_user` не создан | Подключиться через pgAdmin или `docker exec -it postgres psql -U admin` и создать вручную |
+| PostgreSQL слушает только localhost | Проверить `docker-compose.yml`: `ports: "5432:5432"` должен быть без `127.0.0.1:` |
+
+**Ручное создание пользователя и БД:**
+```bash
+docker exec -it postgres psql -U admin
+CREATE USER vw_user WITH PASSWORD 'CHANGE_ME';
+CREATE DATABASE vaultwarden OWNER vw_user;
+GRANT ALL PRIVILEGES ON DATABASE vaultwarden TO vw_user;
+\q
+```
+
+---
+
+## Vaultwarden не может подключиться к БД
+
+**Симптом:** Vaultwarden логи содержит `Error connecting to database`, `Connection refused`.
+
+**Где проявляется:** vm-db-02
+
+**Диагностика:**
+
+1. Проверить что PostgreSQL healthy:
+   ```bash
+   docker compose ps postgres
+   ```
+
+2. Проверить DATABASE_URL:
+   ```bash
+   docker exec vaultwarden env | grep DATABASE_URL
+   ```
+
+3. Попробовать подключиться из контейнера Vaultwarden:
+   ```bash
+   docker exec -it vaultwarden sh
+   # Внутри контейнера:
+   wget -O- http://postgres:80  # должен отказать (это не HTTP)
+   # Проверить DNS:
+   ping postgres
+   ```
+
+**Решение:**
+
+- Убедиться, что оба сервиса в одной сети `db-net`
+- Проверить `.env` на vm-db-02: правильные `VW_DB_USER`, `VW_DB_PASSWORD`, `VW_DB_NAME`
+- Если пароль неверный — исправить в `.env`, `docker compose up -d`
+
+---
+
+## Nginx Proxy Manager не проксирует запросы
+
+**Симптом:** `https://vw.home.loc` возвращает 502 Bad Gateway или timeout.
+
+**Где проявляется:** vm-proxy-02
+
+**Диагностика:**
+
+1. Проверить NPM health:
+   ```bash
+   docker compose ps npm
+   docker compose logs npm | tail -30
+   ```
+
+2. Проверить что upstream (целевой сервис) доступен с proxy VM:
+   ```bash
+   curl http://192.168.1.52:8080/   # Vaultwarden
+   curl http://192.168.1.52:5050/   # pgAdmin
+   ```
+
+3. Проверить SSL-сертификат:
+   ```bash
+   openssl s_client -connect vw.home.loc:443 -servername vw.home.loc </dev/null 2>/dev/null | openssl x509 -noout -dates
+   ```
+
+**Частые причины:**
+
+| Причина | Решение |
+|---|---|
+| Upstream сервис (Vaultwarden) не доступен | Запустить сервис на vm-db-02, проверить фаервол |
+| Неправильный IP в Proxy Host настройках | NPM UI: проверить что Forward Hostname/IP = `192.168.1.52`, правильный порт |
+| SSL-сертификат истёк | Перегенерировать через NPM UI или `ssl/generate-ssl.sh` |
+| Блок-лист IP / Access List | Проверить NPM UI: Proxy Host → Access List |
+
+---
+
+## dnsmasq не резолвит локальные домены
+
+**Симптом:** `dig vw.home.loc @192.168.1.51` не возвращает ответ или `NXDOMAIN`.
+
+**Где проявляется:** vm-proxy-02
+
+**Диагностика:**
+
+1. Проверить что dnsmasq запущен:
+   ```bash
+   sudo systemctl status dnsmasq
+   ```
+
+2. Проверить конфиг:
+   ```bash
+   sudo cat /etc/dnsmasq.d/*.conf
+   # Должна быть запись вида: address=/home.loc/192.168.1.51
+   ```
+
+3. Проверить что systemd-resolved остановлен:
+   ```bash
+   sudo systemctl status systemd-resolved   # должен быть inactive/disabled
+   ```
+
+4. Проверить что порт 53 свободен:
+   ```bash
+   sudo lsof -i :53
+   ```
+
+**Решение:**
+
+- Если dnsmasq не запущен: `sudo systemctl start dnsmasq`
+- Если конфиг пуст — добавить запись и `sudo systemctl restart dnsmasq`
+- Если systemd-resolved перехватывает порт 53:
+  ```bash
+  sudo systemctl stop systemd-resolved
+  sudo systemctl disable systemd-resolved
+  sudo systemctl restart dnsmasq
+  ```
+
+---
+
+## Git sparse checkout не обновляется
+
+**Симптом:** `bash sync.sh` не подтягивает новые файлы или ошибка checkout.
+
+**Диагностика:**
+
+1. Проверить статус sparse checkout:
+   ```bash
+   git sparse-checkout list
+   ```
+
+2. Проверить статус репозитория:
+   ```bash
+   git status
+   git fetch origin
+   ```
+
+**Решение:**
+
+```bash
+# Сбросить sparse checkout и пересоздать
+git sparse-checkout disable
+git sparse-checkout set vm-db-02   # или vm-proxy-02
+git pull origin main
+```
+
+**Если конфликт локальных изменений:**
+```bash
+git checkout -- .   # отменить локальные изменения (НЕ .env!)
+git pull origin main
+```
+
+---
+
+## Место на диске заполнено (Docker volumes, логи)
+
+**Симптом:** `No space left on device`, Docker не запускается.
+
+**Диагностика:**
+
+1. Проверить место:
+   ```bash
+   df -h
+   du -sh /var/lib/docker/volumes/* | sort -h | tail -10
+   docker system df
+   ```
+
+2. Проверить логи Docker:
+   ```bash
+   sudo journalctl --disk-usage
+   ```
+
+**Решение:**
+
+```bash
+# Удалить unused images
+docker image prune -a
+
+# Удалить unused volumes (ОСТОРОЖНО — данные будут потеряны!)
+docker volume prune
+
+# Очистить Docker logs
+sudo journalctl --vacuum-size=100M
+
+# Очистить старые бэкапы PostgreSQL (оставить последние 7 дней)
+find /opt/homelab/backups/ -name "*.sql" -mtime +7 -delete
+```
