@@ -31,7 +31,7 @@
 
 ---
 
-## vm-db-02 (192.168.1.36)
+## vm-db-01 (192.168.1.36)
 
 ### PostgreSQL 16
 
@@ -49,8 +49,7 @@
   - `01-init-vaultwarden-db.sql` — создаёт пользователя `vw_user`, БД `vaultwarden`, выдаёт права
   - Использует `\getenv` для чтения переменных окружения
 - **Особенности:**
-  - Порт 5432 проброшен на LAN — доступен другим VM
-  - На vm-db-02 все сервисы изолированы в Docker network `db-net`
+  - На vm-db-01 все сервисы изолированы в Docker network `db-net`
   - Major upgrade (16→17) требует `pg_dumpall` — нельзя просто сменить тег образа
 - **Документация:** https://hub.docker.com/_/postgres
 
@@ -88,63 +87,3 @@
   - `start_period: 60s` — дольше прогревается, т.к. инициализирует internal БД
   - Доступен на LAN: `http://192.168.1.36:5050`
 - **Документация:** https://www.pgadmin.org/docs/pgadmin4/latest/
-
----
-
-## vm-proxy-02 (192.168.1.37)
-
-### Nginx Proxy Manager
-
-- **Назначение:** Reverse proxy с SSL-терминацией (Let's Encrypt) и веб-UI управления
-- **Образ:** `jc21/nginx-proxy-manager:latest`
-- **Порты:**
-  - `80:80` — HTTP (редирект на HTTPS)
-  - `443:443` — HTTPS (SSL termination)
-  - `81:81` — Admin UI
-- **Переменные окружения:**
-  - `INITIAL_ADMIN_EMAIL` — email администратора для первого входа (из `.env`)
-  - `INITIAL_ADMIN_PASSWORD` — пароль для первого входа (из `.env`)
-  - **Важно:** после первого входа сменить пароль в UI (Admin > Change Credentials)
-- **Volumes:**
-  - `npm-data` → `/data` — конфигурация NPM, SQLite БД
-  - `npm-letsencrypt` → `/etc/letsencrypt` — SSL-сертификаты Let's Encrypt
-- **Healthcheck:** `/usr/bin/check-health` каждые 10с
-- **Особенности:**
-  - Версия образа `latest` — осознанный компромисс, т.к. NPM не выпускает стабильные теги регулярно
-  - SSL-сертификаты можно генерировать вручную через `ssl/generate-ssl.sh` (self-signed wildcard для `*.home.loc`)
-  - Обратные прокси настраиваются через Admin UI (`http://192.168.1.37:81`)
-- **Документация:** https://nginxproxymanager.com/
-
-### Homepage
-
-- **Назначение:** Стартовая страница / дашборд со списком всех сервисов homelab
-- **Образ:** `ghcr.io/gethomepage/homepage:latest`
-- **Порты:** `127.0.0.1:3000:3000` (доступен через NPM reverse proxy)
-- **Сеть:** `proxy-net` (bridge, общая с NPM)
-- **Переменные окружения:**
-  - `HOMEPAGE_ALLOWED_HOSTS` — разрешённые хосты (из `.env`, например `home.home.loc`)
-  - `PUID=1000`, `PGID=1000` — UID/GID процесса
-- **Volumes:**
-  - `./configs/homepage` → `/app/config` — YAML-конфиги сервисов, виджетов, настроек (в git)
-  - `/var/run/docker.sock:ro` — для отображения статуса локальных контейнеров (npm, homepage)
-- **Healthcheck:** `wget -qO- http://localhost:3000` каждые 10с
-- **Конфигурационные файлы** (`vm-proxy-02/configs/homepage/`):
-  - `settings.yaml` — тема, layout, заголовок
-  - `services.yaml` — список сервисов с иконками и ссылками
-  - `widgets.yaml` — виджеты (CPU, RAM, диск, время)
-  - `bookmarks.yaml` — ссылки (Proxmox и др.)
-  - `docker.yaml` — подключение к локальному Docker socket
-- **Доступ:** `https://home.home.loc` через NPM (или `http://192.168.1.37:3000` недоступно напрямую, только localhost)
-- **Документация:** [gethomepage.dev](https://gethomepage.dev/)
-
-### dnsmasq (split-DNS)
-
-- **Назначение:** DNS-сервер с split-DNS для локального домена `*.home.loc`
-- **Установка:** Не Docker-сервис, устанавливается напрямую на VM через `deploy-dnsmasq.sh`
-- **Порты:** `53` (UDP/TCP)
-- **Конфигурация:** Локальные DNS-записи направляют `*.home.loc` → `192.168.1.37` (NPM)
-- **Особенности:**
-  - Требует остановки `systemd-resolved` перед установкой
-  - Временный DNS прописывается до полной настройки
-  - Для каждого нового сервиса добавляется запись в конфиг dnsmasq
-- **Документация:** [thekelleys.org.uk/dnsmasq](https://thekelleys.org.uk/dnsmasq/doc.html)

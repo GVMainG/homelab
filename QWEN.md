@@ -2,24 +2,20 @@
 
 ## Overview
 
-This repository contains infrastructure-as-code for a homelab environment running on two Proxmox VE virtual machines within a local network (192.168.1.0/24). Each VM manages its own configuration through **git sparse checkout**, cloning only its specific subdirectory.
+This repository contains infrastructure-as-code for a homelab environment running on a single Proxmox VE virtual machine within a local network (192.168.1.0/24). The VM manages its own configuration through **git sparse checkout**, cloning only its specific subdirectory.
 
-### Virtual Machines
+### Virtual Machine
 
 | VM | IP | Services |
 |---|---|---|
-| `vm-db-02` | 192.168.1.52 | PostgreSQL 16, Vaultwarden (password manager), pgAdmin |
-| `vm-proxy-02` | 192.168.1.51 | dnsmasq (split-DNS), Nginx Proxy Manager (reverse proxy with SSL termination) |
-
-**Note:** This repository also contains configurations for `vm-db-01` and `vm-proxy-01` (the original VMs), following the same patterns.
+| `vm-db-01` | 192.168.1.36 | PostgreSQL 16, Vaultwarden (password manager), pgAdmin |
 
 ## Architecture
 
 ```
-Internet → vm-proxy-02:443 (NPM, SSL termination) → internal services
-LAN       → dnsmasq:53  (*.home.loc → proxy VM IP)
-vm-db-02  → PostgreSQL bound to localhost only
-            Vaultwarden and pgAdmin accessible on LAN
+LAN       → vm-db-01:5432  (PostgreSQL, accessible from LAN)
+            vm-db-01:8080 → Vaultwarden (password manager)
+            vm-db-01:5050 → pgAdmin (PostgreSQL web UI)
             All services share isolated Docker network: db-net
 ```
 
@@ -30,19 +26,20 @@ homelab/
 ├── .gitignore              # Excludes .env files, SSL certs, backups
 ├── CLAUDE.md               # Comprehensive project guidelines
 ├── QWEN.md                 # This file
-├── vm-db-01/               # Database VM #1 (PostgreSQL, Vaultwarden, pgAdmin)
-├── vm-db-02/               # Database VM #2 (PostgreSQL, Vaultwarden, pgAdmin)
-│   ├── docker-compose.yml  # Service definitions
-│   ├── sync.sh             # Git sparse checkout sync script
-│   ├── .env.example        # Environment variable template
-│   └── init-scripts/       # PostgreSQL initialization scripts
-│       └── 01-init-vaultwarden-db.sql
-└── vm-proxy-02/            # Proxy VM #2 (Nginx Proxy Manager, dnsmasq)
-    ├── docker-compose.yml  # Nginx Proxy Manager service
+├── docs/                   # Infrastructure documentation
+│   ├── overview.md         # Network map and VM table
+│   ├── services.md         # Service descriptions
+│   ├── changelog.md        # Change log
+│   ├── decisions.md        # Architecture decision records
+│   ├── runbooks.md         # Operational runbooks
+│   ├── troubleshooting.md  # Troubleshooting guide
+│   └── vm-setup.md         # VM provisioning guide
+└── vm-db-01/               # Database VM (PostgreSQL, Vaultwarden, pgAdmin)
+    ├── docker-compose.yml  # Service definitions
     ├── sync.sh             # Git sparse checkout sync script
     ├── .env.example        # Environment variable template
-    └── ssl/
-        └── generate-ssl.sh # Wildcard SSL certificate generator
+    └── init-scripts/       # PostgreSQL initialization scripts
+        └── 01-init-vaultwarden-db.sql
 ```
 
 ## Key Technologies
@@ -58,35 +55,30 @@ homelab/
 
 ## Deployment Guide
 
-### Initial Setup (Per VM)
+### Initial Setup
 
 #### Sparse Checkout
 
-Each VM clones only its own subdirectory:
+The VM clones only its own subdirectory:
 
 ```bash
 # On the target VM
 git clone --filter=blob:none --sparse --branch main https://github.com/GVMainG/homelab.git
 cd homelab
-git sparse-checkout set vm-db-02   # or vm-proxy-02
+git sparse-checkout set vm-db-01
 ```
 
 #### Using sync.sh (Recommended)
 
-Both VM directories include a `sync.sh` script that automates sparse checkout:
-
 ```bash
-# vm-db-02
-sudo bash vm-db-02/sync.sh
-
-# vm-proxy-02
-sudo bash vm-proxy-02/sync.sh
+# On vm-db-01
+sudo bash vm-db-01/sync.sh
 ```
 
-### vm-db-02 (Database VM)
+### vm-db-01 (Database VM)
 
 ```bash
-cd /opt/homelab/vm-db-02
+cd /opt/homelab/vm-db-01
 
 # 1. Create environment file
 cp .env.example .env
@@ -100,30 +92,11 @@ docker compose ps    # check all services are healthy
 docker compose logs -f <service>
 ```
 
-### vm-proxy-02 (Proxy VM)
-
-```bash
-cd /opt/homelab/vm-proxy-02
-
-# 1. Create environment file
-cp .env.example .env
-# Edit .env with admin credentials
-
-# 2. Install dnsmasq (if not already done)
-# (Manual setup required — see CLAUDE.md for Proxmox conventions)
-
-# 3. Generate SSL certificates (optional, for self-signed)
-bash ssl/generate-ssl.sh
-
-# 4. Deploy Nginx Proxy Manager
-docker compose up -d --remove-orphans
-```
-
 ### Updating Services
 
 ```bash
 # Pull latest config from git
-bash sync.sh
+bash vm-db-01/sync.sh
 
 # Update Docker images and restart
 docker compose pull && docker compose up -d

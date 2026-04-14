@@ -39,6 +39,12 @@
 
 ## 2026-04
 
+### 2026-04-14 — Удалена proxy VM, оставлена только vm-db-01
+
+- **Тип:** removed
+- **VM:** vm-proxy-02, vm-db-02 → переименована в vm-db-01
+- **Описание:** Удалены vm-proxy-02 (NPM, dnsmasq, Homepage) и vm-db-02 переименована в vm-db-01. Теперь одна VM с PostgreSQL, Vaultwarden, pgAdmin. Сервисы доступны напрямую по IP `192.168.1.36` без reverse proxy и SSL-терминации.
+
 ### 2026-04-14 — Исправлены метаданные SSL-сертификата в NPM
 
 - **Тип:** fixed

@@ -48,24 +48,23 @@
 
 **Шаги:**
 
-1. SSH на нужную VM:
+1. SSH на vm-db-01:
 
    ```bash
-   ssh user-home@192.168.1.36   # vm-db-02
-   ssh user-home@192.168.1.37   # vm-proxy-02
+   ssh user-home@192.168.1.36
    ```
 
 2. Перейти в директорию homelab и запустить sync:
 
    ```bash
    cd /opt/homelab
-   bash vm-db-02/sync.sh   # или vm-proxy-02/sync.sh
+   bash vm-db-01/sync.sh
    ```
 
 3. Обновить Docker-образы и перезапустить:
 
    ```bash
-   cd vm-db-02   # или vm-proxy-02
+   cd vm-db-01
    docker compose pull && docker compose up -d --remove-orphans
    ```
 
@@ -87,17 +86,17 @@ docker compose down  # остановить, если что-то сломало
 
 ## Развёртывание нового сервиса в docker-compose
 
-**Когда применять:** Нужно добавить новый сервис на существующую VM.
+**Когда применять:** Нужно добавить новый сервис на vm-db-01.
 
 **Предусловия:** Доступ к VM, понимание конвенций Docker Compose проекта.
 
 **Шаги:**
 
 1. Добавить секцию сервиса в `docker-compose.yml`:
-   - Указать `image` с версией (кроме NPM)
+   - Указать `image` с версией
    - Добавить `container_name`, `restart: unless-stopped`
    - Добавить `env_file: .env`
-   - Настроить `ports` с префиксом `127.0.0.1:` если не нужен внешний доступ
+   - Настроить `ports` с нужным портом
    - Добавить `volumes` для персистентных данных
    - Подключить к `db-net`
    - Добавить `healthcheck`
@@ -111,18 +110,11 @@ docker compose down  # остановить, если что-то сломало
 4. На VM:
 
    ```bash
-   bash vm-db-02/sync.sh
-   cd vm-db-02
-   # Проверить что .env содержит все новые переменные
+   bash vm-db-01/sync.sh
+   cd vm-db-01
    docker compose up -d --remove-orphans
    docker compose ps
    ```
-
-5. Добавить запись в `dnsmasq` (если нужен домен):
-   - На vm-proxy-02: отредактировать конфиг dnsmasq, добавить `address=/newservice.home.loc/192.168.1.37`
-   - Перезапустить: `sudo systemctl restart dnsmasq`
-
-6. Настроить reverse proxy в NPM UI (`http://192.168.1.37:81`).
 
 **Проверка:**
 
@@ -144,11 +136,11 @@ docker compose rm -sf <service>   # удалить контейнер
 
 **Когда применять:** Перед изменениями, плановый бэкап, перед upgrade.
 
-**Предусловия:** Доступ к vm-db-02, достаточно места на диске.
+**Предусловия:** Доступ к vm-db-01, достаточно места на диске.
 
 **Шаги:**
 
-1. SSH на vm-db-02:
+1. SSH на vm-db-01:
 
    ```bash
    ssh user-home@192.168.1.36
@@ -176,173 +168,40 @@ head -5 /opt/homelab/backups/full-YYYYMMDD.sql
 
 ---
 
-## Сброс пароля администратора Nginx Proxy Manager
+## Очистка Docker (unused images, volumes, logs)
 
-**Когда применять:** Забыт пароль от Admin UI NPM.
+**Когда применять:** Место на диске заполнено, плановая очистка.
 
-**Предусловия:** Доступ к vm-proxy-02.
-
-**Шаги:**
-
-1. SSH на vm-proxy-02:
-
-   ```bash
-   ssh user-home@192.168.1.37
-   cd /opt/homelab/vm-proxy-02
-   ```
-
-2. Остановить NPM:
-
-   ```bash
-   docker compose down
-   ```
-
-3. Сбросить пароль через SQLite (NPM хранит в `/data/database.sqlite`):
-
-   ```bash
-   docker run --rm -v npm-data:/data alpine sh -c "apk add sqlite && sqlite3 /data/database.sqlite \"UPDATE user SET password='\\$argon2id\\$v=19\\$m=65536,t=3,p=4\\$...' WHERE email='admin@home.loc';\""
-   ```
-
-   **ИЛИ** проще — удалить БД и пересоздать (потеря конфигов proxy):
-
-   ```bash
-   docker volume rm vm-proxy-02_npm-data
-   docker compose up -d
-   # Войти с INITIAL_ADMIN_EMAIL/INITIAL_ADMIN_PASSWORD из .env
-   ```
-
-**Проверка:** `http://192.168.1.37:81` — вход работает.
-
-**Откат:** Если удалена БД — воссоздать reverse proxy записи через UI.
-
----
-
-## Обновление самоподписанного SSL-сертификата *.home.loc
-
-**Когда применять:** Сертификат просрочен или истекает. Проверить дату: NPM UI → SSL Certificates, или `openssl x509 -in /opt/homelab/vm-proxy-02/ssl/certs/cert.pem -noout -dates`.
-
-**Предусловия:** Доступ к vm-proxy-02, доступ к Windows PC для обновления CA (если изменился CA).
-
-**Примерное время:** 15-20 минут
+**Предусловия:** Доступ к vm-db-01.
 
 **Шаги:**
 
-1. SSH на vm-proxy-02:
+1. SSH на vm-db-01:
 
    ```bash
-   ssh user-home@192.168.1.37
-   cd /opt/homelab/vm-proxy-02/ssl
+   ssh user-home@192.168.1.36
    ```
 
-2. Перегенерировать сертификат:
+2. Проверить использование места:
 
    ```bash
-   bash generate-ssl.sh
-   # Создаёт новые файлы в ./certs/: ca.key, ca.crt, cert.key, cert.crt, fullchain.pem
+   df -h
+   docker system df
    ```
 
-3. Скопировать новые файлы в Docker volume NPM:
+3. Очистить:
 
    ```bash
-   docker run --rm \
-     -v /opt/homelab/vm-proxy-02/ssl/certs:/src \
-     -v vm-proxy-02_npm-data:/data \
-     alpine sh -c "
-       mkdir -p /data/custom_ssl/npm-1
-       cp /src/fullchain.pem /data/custom_ssl/npm-1/fullchain.pem
-       cp /src/cert.key      /data/custom_ssl/npm-1/privkey.pem
-     "
+   # Удалить unused images
+   docker image prune -a
+
+   # Удалить unused volumes (ОСТОРОЖНО — данные будут потеряны!)
+   docker volume prune
+
+   # Очистить старые бэкапы PostgreSQL (оставить последние 7 дней)
+   find /opt/homelab/backups/ -name "*.sql" -mtime +7 -delete
    ```
 
-4. Обновить метаданные в SQLite-базе NPM:
+**Проверка:** `df -h` — место освободилось.
 
-   ```bash
-   # Получить реальную дату из нового сертификата
-   NEW_EXPIRY=$(openssl x509 -in /opt/homelab/vm-proxy-02/ssl/certs/cert.crt -noout -enddate | cut -d= -f2)
-   echo "New expiry: $NEW_EXPIRY"
-
-   cat > /tmp/fix_cert.py << 'PYEOF'
-   import sqlite3, sys
-   expiry = sys.argv[1]   # формат: Apr 11 09:35:36 2036 GMT
-   from datetime import datetime
-   dt = datetime.strptime(expiry, "%b %d %H:%M:%S %Y %Z")
-   formatted = dt.strftime("%Y-%m-%d %H:%M:%S")
-   conn = sqlite3.connect("/data/database.sqlite")
-   cur = conn.cursor()
-   cur.execute("UPDATE certificate SET expires_on = ? WHERE id = 1", (formatted,))
-   conn.commit()
-   print("Updated expires_on to:", formatted)
-   conn.close()
-   PYEOF
-
-   docker run --rm \
-     -v vm-proxy-02_npm-data:/data \
-     -v /tmp/fix_cert.py:/tmp/fix_cert.py \
-     python:3-alpine python3 /tmp/fix_cert.py "$NEW_EXPIRY"
-   ```
-
-5. Перезагрузить nginx и перезапустить NPM:
-
-   ```bash
-   docker exec npm nginx -s reload
-   cd /opt/homelab/vm-proxy-02
-   docker compose restart npm
-   ```
-
-6. Если изменился CA (перегенерирован ca.key/ca.crt) — обновить CA на Windows PC:
-   - Скопировать `ca.crt` с VM: `scp user-home@192.168.1.37:/opt/homelab/vm-proxy-02/ssl/certs/ca.crt C:\Users\GV\Downloads\homelab-ca.crt`
-   - Удалить старый CA и установить новый (PowerShell Administrator):
-
-     ```powershell
-     # Удалить старый CA (найти по Subject)
-     Get-ChildItem Cert:\LocalMachine\Root | Where-Object {$_.Subject -like "*Homelab*"} | Remove-Item
-     # Установить новый
-     Import-Certificate -FilePath "C:\Users\GV\Downloads\homelab-ca.crt" -CertStoreLocation Cert:\LocalMachine\Root
-     ```
-
-**Проверка:**
-
-```bash
-# На VM:
-echo | openssl s_client -connect localhost:443 -servername vw.home.loc 2>&1 | openssl x509 -noout -dates
-# NPM UI: SSL Certificates → должна быть новая дата
-```
-
-**Откат:** Вернуть предыдущие файлы из backup (если сохранены). NPM хранит только один набор файлов на сертификат.
-
----
-
-## Добавление нового домена в dnsmasq
-
-**Когда применять:** Новый сервис needs DNS-запись вида `service.home.loc`.
-
-**Предусловия:** Доступ к vm-proxy-02, root.
-
-**Шаги:**
-
-1. SSH на vm-proxy-02:
-
-   ```bash
-   ssh user-home@192.168.1.37
-   ```
-
-2. Добавить запись в конфиг dnsmasq (файл зависит от конфигурации, обычно `/etc/dnsmasq.d/01-split-dns.conf`):
-
-   ```bash
-   sudo nano /etc/dnsmasq.d/01-split-dns.conf
-   # Добавить: address=/newservice.home.loc/192.168.1.37
-   ```
-
-3. Перезапустить dnsmasq:
-
-   ```bash
-   sudo systemctl restart dnsmasq
-   ```
-
-**Проверка:**
-
-```bash
-dig newservice.home.loc @192.168.1.37   # должен вернуть 192.168.1.37
-```
-
-**Откат:** Удалить строку из конфига, `sudo systemctl restart dnsmasq`.
+**Откат:** Удалённые images будут скачаны заново при `docker compose pull`. Volumes восстановить из backup.

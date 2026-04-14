@@ -4,21 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A homelab infrastructure monorepo for two VMs running on a Proxmox VE host (LAN 192.168.1.0/24). Each VM uses **git sparse checkout** — it clones only its own subdirectory.
+A homelab infrastructure monorepo for a single VM running on a Proxmox VE host (LAN 192.168.1.0/24). The VM uses **git sparse checkout** — it clones only its own subdirectory.
 
 | VM | IP | Services |
 |---|---|---|
-| `vm-db-01` | 192.168.1.51 | PostgreSQL 16.4, Vaultwarden 1.32.5, pgAdmin 8.12 |
-| `vm-proxy-01` | 192.168.1.50 | dnsmasq (split-DNS), Nginx Proxy Manager |
+| `vm-db-01` | 192.168.1.36 | PostgreSQL 16, Vaultwarden, pgAdmin 4 |
 
 ## Network architecture
 
 ```
-Internet → vm-proxy-01:443 (NPM, SSL termination) → services
-LAN       → dnsmasq:53  (*.host.loc → 192.168.1.50)
-vm-db-01  → PostgreSQL bound to 127.0.0.1 only (no external port)
-            Vaultwarden :8081, pgAdmin :5050 on LAN
-            All three share isolated Docker network: db-internal
+LAN       → vm-db-01:5432 (PostgreSQL, bound to 0.0.0.0)
+            vm-db-01:8080 → Vaultwarden (password manager)
+            vm-db-01:5050 → pgAdmin (PostgreSQL web UI)
+            All three share isolated Docker network: db-net
 ```
 
 ## Deploying / running services
@@ -26,17 +24,14 @@ vm-db-01  → PostgreSQL bound to 127.0.0.1 only (no external port)
 ```bash
 # vm-db-01 — first deploy
 cp .env.example .env   # fill in all CHANGE_ME values
-bash deploy.sh         # idempotent
+bash sync.sh           # idempotent, sparse checkout
 
-# vm-proxy-01 — first deploy
-sudo bash deploy-dnsmasq.sh   # stops systemd-resolved, installs dnsmasq
-docker compose up -d          # start Nginx Proxy Manager
-
-# Any VM — update from git
-bash sync.sh
+# Update from git
+bash vm-db-01/sync.sh
+docker compose pull && docker compose up -d
 
 # Manual PostgreSQL backup
-bash backup.sh   # rotates at 30 days
+docker exec postgres pg_dumpall -U admin > /opt/homelab/backups/full-$(date +%Y%m%d-%H%M%S).sql
 ```
 
 ## Key Docker Compose operations
@@ -91,8 +86,7 @@ cd "$SCRIPT_DIR"
 ## Proxmox conventions
 
 - Snapshot before risky changes: `qm snapshot <vmid> YYYYMMDD-reason`
-- SSH to VMs from Windows workstation: `ssh gv@192.168.1.51`
-- When adding a new VM: create subdirectory in repo with `deploy.sh`, `sync.sh`, `.env.example`, `docker-compose.yml`; add DNS entry to `vm-proxy-01/configs/dnsmasq/01-split-dns.conf`
+- SSH to VM: `ssh user-home@192.168.1.36`
 
 ## PowerShell (Windows workstation only)
 
