@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # setup.sh — первичный деплой vm-DevOps-01.
-# Запускать ОДИН РАЗ от root на чистом Debian 12.
+# Запускать от root на чистом Debian 12.
 # Идемпотентен: повторный запуск не ломает конфигурацию.
+#
+# Полный bootstrap (одна команда на чистой VM):
+#   bash <(curl -fsSL https://raw.githubusercontent.com/GVMainG/homelab/main/vm-DevOps-01/setup.sh)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,23 +28,47 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-ENV_FILE="${SCRIPT_DIR}/.env"
+# ── Шаг 1: Клонирование / обновление репозитория ─────────────────────────────
+# Обеспечивает, что на VM есть актуальная папка vm-DevOps-01 из homelab-репозитория.
+log_step "Синхронизация репозитория homelab"
 
-# ── Шаг 1: Обновление системы ─────────────────────────────────────────────────
+REPO_URL="https://github.com/GVMainG/homelab.git"
+CLONE_DIR="/opt/homelab"
+SPARSE_PATH="vm-DevOps-01"
+
+# git нужен до Docker — ставим заранее
+if ! command -v git &>/dev/null; then
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git
+fi
+
+if [[ -d "${CLONE_DIR}/.git" ]]; then
+    log_info "Репозиторий существует — git pull..."
+    git -C "${CLONE_DIR}" pull
+else
+    log_info "Клонирование (sparse checkout)..."
+    git clone --filter=blob:none --sparse --branch main "${REPO_URL}" "${CLONE_DIR}"
+    git -C "${CLONE_DIR}" sparse-checkout set "${SPARSE_PATH}"
+fi
+
+# Переходим в рабочий каталог vm-DevOps-01 внутри клона
+DEPLOY_DIR="${CLONE_DIR}/${SPARSE_PATH}"
+cd "$DEPLOY_DIR"
+log_info "Рабочий каталог: ${DEPLOY_DIR}"
+
+ENV_FILE="${DEPLOY_DIR}/.env"
+
+# ── Шаг 2: Обновление системы и пакеты ───────────────────────────────────────
 log_step "Обновление системы"
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
-log_info "Система обновлена"
-
-# ── Шаг 2: Установка вспомогательных пакетов ─────────────────────────────────
-log_step "Установка пакетов"
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     ca-certificates \
     curl \
     gnupg \
     lsb-release \
     openssl
-log_info "Пакеты установлены"
+log_info "Система обновлена"
 
 # ── Шаг 3: Установка Docker ───────────────────────────────────────────────────
 log_step "Установка Docker"
@@ -69,7 +96,7 @@ https://download.docker.com/linux/debian $(lsb_release -cs) stable" \
     log_info "Docker установлен: $(docker --version)"
 fi
 
-# ── Шаг 4: Генерация .env ─────────────────────────────────────────────────────
+# ── Шаг 4: Генерация .env ────────────────────────────────────────────────────
 log_step "Настройка .env"
 
 SKIP_ENV=false
@@ -125,5 +152,5 @@ echo -e "  Статус:  docker compose ps"
 echo -e "  Логи:    docker compose logs -f dockhand"
 echo ""
 echo -e "  Для настройки FRP-туннеля:"
-echo -e "    sudo bash ${SCRIPT_DIR}/frpc-setup.sh"
+echo -e "    sudo bash ${DEPLOY_DIR}/frpc-setup.sh"
 echo ""
