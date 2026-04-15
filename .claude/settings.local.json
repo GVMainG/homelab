@@ -86,7 +86,11 @@
       "Bash(ssh user-home@192.168.1.37 'docker run --rm -v npm-data:/data python:3-alpine python3 -c \":*)",
       "Bash(ssh user-home@192.168.1.37 'docker run --rm -v npm-data:/data python:3-alpine sh -c \"python3 /tmp/q.py\"')",
       "Bash(ssh user-home@192.168.1.37:*)",
-      "WebFetch(domain:timeweb.cloud)"
+      "WebFetch(domain:timeweb.cloud)",
+      "Bash(gh repo *)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:dockhand.pro)"
     ]
   }
 }

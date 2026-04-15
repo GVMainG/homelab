@@ -1,0 +1,42 @@
+# docker-compose.yml — vm-DevOps-01
+#
+# Сервисы:
+#   dockhand — веб-интерфейс управления Docker-контейнерами и Compose-стеками.
+#              БД: SQLite (/app/data/database.sqlite) по умолчанию.
+#              Доступ к Docker через /var/run/docker.sock.
+#
+# Секреты:
+#   ENCRYPTION_KEY — читается из .env (генерируется setup.sh).
+#
+# Исключение из правила pin-версий: fnsys/dockhand:latest —
+#   upstream не публикует стабильные версионированные теги.
+
+services:
+
+  # ── Dockhand ───────────────────────────────────────────────────────────────
+  # Веб-интерфейс управления Docker: контейнеры, Compose-стеки, логи, терминал.
+  # :3000 — веб-UI (http://VM_IP:3000)
+  # При первом запуске аутентификация отключена — включить в Settings → Authentication.
+  dockhand:
+    image: fnsys/dockhand:latest
+    container_name: dockhand
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    ports:
+      - "3000:3000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # доступ к Docker-демону
+      - dockhand-data:/app/data                      # конфиги, SQLite, git-репо стеков
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  dockhand-data:

@@ -4,11 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A homelab infrastructure monorepo for a single VM running on a Proxmox VE host (LAN 192.168.1.0/24). The VM uses **git sparse checkout** — it clones only its own subdirectory.
+A homelab infrastructure monorepo for VMs running on a Proxmox VE host (LAN 192.168.1.0/24). Each VM uses **git sparse checkout** — it clones only its own subdirectory.
 
 | VM | IP | Services |
-|---|---|---|
+| --- | --- | --- |
 | `vm-db-01` | 192.168.1.36 | PostgreSQL 16, Vaultwarden, pgAdmin 4 |
+| `vm-DevOps-01` | 192.168.1.XX | Dockhand (Docker management UI) |
 
 ## Network architecture
 

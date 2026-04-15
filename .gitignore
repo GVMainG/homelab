@@ -1,6 +1,3 @@
-# SSL certificates (generated locally)
-vm-proxy-02/ssl/certs/
-
 # PostgreSQL backups (stored on VM)
 backups/
 */backups/
