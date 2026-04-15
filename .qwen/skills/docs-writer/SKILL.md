@@ -1,3 +1,8 @@
+---
+name: docs-writer
+description: Автоматическое заполнение документации в docs/. Use when updating documentation, changelog, or docs based on git commits and code changes.
+---
+
 # docs-writer
 
 ## Описание

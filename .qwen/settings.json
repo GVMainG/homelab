@@ -4,7 +4,10 @@
       "Bash(mkdir *)",
       "Bash(dir *)",
       "Bash(git mv *)",
-      "Bash(rmdir *)"
+      "Bash(rmdir *)",
+      "Read(c:\\Users\\GV\\.vscode\\extensions\\qwenlm.qwen-code-vscode-ide-companion-0.14.4-win32-x64\\dist\\qwen-cli\\bundled\\qc-helper\\docs\\features/**)",
+      "Bash(type *)",
+      "Bash(powershell *)"
     ]
   },
   "$version": 3

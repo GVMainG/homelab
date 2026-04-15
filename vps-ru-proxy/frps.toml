@@ -1,3 +1,4 @@
+  GNU nano 7.2                                            /opt/vps-ru-proxy/frps.toml
 # frps.toml — шаблон конфигурации FRP-сервера
 #
 # ВНИМАНИЕ: Это шаблон. Плейсхолдеры ${FRP_TOKEN} и ${FRP_DASHBOARD_PASSWORD}

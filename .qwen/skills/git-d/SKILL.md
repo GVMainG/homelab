@@ -1,3 +1,8 @@
+---
+name: git-d
+description: Анализ изменений и подготовка commit message. Use when analyzing git changes, preparing commit messages, or reviewing diffs.
+---
+
 # git-d
 
 ## Описание
@@ -34,8 +39,8 @@ git log -n 1 --format="%B"
 На основе diff определить:
 
 - **Тип изменений:** `feat` / `fix` / `docs` / `refactor` / `chore` / `style` / `test` / `ci`
-- **Затронутые VM:** `vm-db-02`, `vm-proxy-02`, или обе
-- **Затронутые сервисы:** postgres, vaultwarden, pgadmin, npm
+- **Затронутые VM:** `vm-db-01`, `vm-proxy-02`, или обе
+- **Затронутые сервисы:** postgres, vaultwarden, pgadmin, npm, frps
 - **Scope:** что именно изменилось (конфиг, скрипт, документация)
 
 ### Шаг 3 — Формирование commit message
@@ -53,7 +58,7 @@ git log -n 1 --format="%B"
 **Правила:**
 
 - **type:** `feat`, `fix`, `docs`, `refactor`, `chore`, `test`, `ci`
-- **scope:** имя VM или сервиса (`vm-db-02`, `vm-proxy-02`, `postgres`, `npm`)
+- **scope:** имя VM или сервиса (`vm-db-01`, `vm-proxy-02`, `postgres`, `npm`, `frps`)
 - **description:** краткое описание, начинающееся с глагола, без точки в конце, не более 72 символов
 - **body:** подробности, список конкретных изменений (по одному на строку), только если изменений много
 - **footer:** `BREAKING CHANGE:` если есть обратная несовместимость; ссылки на issue если есть
@@ -102,9 +107,9 @@ git add -A && git commit -m "<message>"
 
 **Агент собирает:**
 ```
-git status → M vm-db-02/docker-compose.yml
+git status → M vm-db-01/docker-compose.yml
 git diff → добавлен healthcheck для vaultwarden
-git log → стиль: "feat(vm-db-02): add pgAdmin service"
+git log → стиль: "feat(vm-db-01): add Vaultwarden service"
 ```
 
 **Выводит:**
@@ -112,14 +117,14 @@ git log → стиль: "feat(vm-db-02): add pgAdmin service"
 📝 Proposed commit message:
 
 ---
-feat(vm-db-02): add healthcheck for vaultwarden service
+feat(vm-db-01): add healthcheck for vaultwarden service
 
 - Add curl-based healthcheck to docker-compose.yml
 - Interval: 10s, timeout: 5s, retries: 5
 ---
 
 Staged files: 0 | Unstaged files: 1
-Changed: vm-db-02/docker-compose.yml
+Changed: vm-db-01/docker-compose.yml
 
 Подтвердить коммит?
 ```
