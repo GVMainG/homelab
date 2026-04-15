@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# setup.sh — первичный деплой vm-DevOps-01.
+# first-deployment.sh — первичный деплой vm-db-01.
 # Запускать от root на чистом Debian 12.
-# Идемпотентен: повторный запуск не ломает конфигурацию.
 #
-# Полный bootstrap (одна команда на чистой VM):
-#   bash <(curl -fsSL https://raw.githubusercontent.com/GVMainG/homelab/main/vm-DevOps-01/setup.sh)
+# Bootstrap (одна команда на чистой VM):
+#   bash <(curl -fsSL https://raw.githubusercontent.com/GVMainG/homelab/main/vm-db-01/first-deployment.sh)
+#
+# Защита от повторного запуска: при наличии маркера .deployed скрипт остановится.
+# Для переустановки: rm /opt/homelab/vm-db-01/.deployed && bash first-deployment.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,15 +30,13 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-# ── Шаг 1: Клонирование / обновление репозитория ─────────────────────────────
-# Обеспечивает, что на VM есть актуальная папка vm-DevOps-01 из homelab-репозитория.
+# ── Шаг 1: Синхронизация репозитория ─────────────────────────────────────────
 log_step "Синхронизация репозитория homelab"
 
 REPO_URL="https://github.com/GVMainG/homelab.git"
 CLONE_DIR="/opt/homelab"
-SPARSE_PATH="vm-DevOps-01"
+SPARSE_PATH="vm-db-01"
 
-# git нужен до Docker — ставим заранее
 if ! command -v git &>/dev/null; then
     apt-get update -qq
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git
@@ -51,14 +51,30 @@ else
     git -C "${CLONE_DIR}" sparse-checkout set "${SPARSE_PATH}"
 fi
 
-# Переходим в рабочий каталог vm-DevOps-01 внутри клона
 DEPLOY_DIR="${CLONE_DIR}/${SPARSE_PATH}"
 cd "$DEPLOY_DIR"
 log_info "Рабочий каталог: ${DEPLOY_DIR}"
 
+# ── Защита от повторного запуска ──────────────────────────────────────────────
+DEPLOYED_MARKER="${DEPLOY_DIR}/.deployed"
+
+if [[ -f "$DEPLOYED_MARKER" ]]; then
+    log_warn "════════════════════════════════════════════════════════════════"
+    log_warn "VM уже была задеплоена: $(cat "$DEPLOYED_MARKER")"
+    log_warn "Повторный запуск может повредить данные PostgreSQL."
+    log_warn "Для обновления используйте:  bash ${DEPLOY_DIR}/sync.sh"
+    log_warn "Для сброса удалите маркер:   rm ${DEPLOYED_MARKER}"
+    log_warn "════════════════════════════════════════════════════════════════"
+    read -r -p "  Продолжить принудительно? [y/N]: " answer
+    if [[ "${answer,,}" != "y" ]]; then
+        log_info "Отменено."
+        exit 0
+    fi
+fi
+
 ENV_FILE="${DEPLOY_DIR}/.env"
 
-# ── Шаг 2: Обновление системы и пакеты ───────────────────────────────────────
+# ── Шаг 2: Обновление системы ─────────────────────────────────────────────────
 log_step "Обновление системы"
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
@@ -96,7 +112,7 @@ https://download.docker.com/linux/debian $(lsb_release -cs) stable" \
     log_info "Docker установлен: $(docker --version)"
 fi
 
-# ── Шаг 4: Генерация .env ────────────────────────────────────────────────────
+# ── Шаг 4: Генерация .env ─────────────────────────────────────────────────────
 log_step "Настройка .env"
 
 SKIP_ENV=false
@@ -110,21 +126,31 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 
 if [[ "$SKIP_ENV" == "false" ]]; then
-    # Генерация AES-256 ключа для шифрования credentials в Dockhand
-    ENCRYPTION_KEY="$(openssl rand -base64 32)"
+    read -r -p "  pgAdmin email [admin@home.loc]: " PGADMIN_EMAIL_INPUT
+    PGADMIN_EMAIL="${PGADMIN_EMAIL_INPUT:-admin@home.loc}"
+
+    POSTGRES_PASSWORD="$(openssl rand -base64 24 | tr -d '=+/')"
+    VW_DB_PASSWORD="$(openssl rand -base64 24 | tr -d '=+/')"
+    PGADMIN_PASSWORD="$(openssl rand -base64 18 | tr -d '=+/')"
 
     cat > "$ENV_FILE" <<EOF
-# Сгенерировано setup.sh $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+# Сгенерировано first-deployment.sh $(date -u '+%Y-%m-%d %H:%M:%S UTC')
 # Не коммитить в git. Права: 600.
 
-# ── Dockhand ──────────────────────────────────────────────────────────────────
-# AES-256 ключ для шифрования учётных данных. Менять НЕЛЬЗЯ после первого запуска —
-# все сохранённые credentials станут нечитаемыми.
-ENCRYPTION_KEY=${ENCRYPTION_KEY}
+# ── PostgreSQL ────────────────────────────────────────────────────────────────
+POSTGRES_USER=admin
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+POSTGRES_DB=postgres
 
-# UID/GID пользователя внутри контейнера
-PUID=$(id -u)
-PGID=$(id -g)
+# ── Vaultwarden (выделенный пользователь БД) ──────────────────────────────────
+# Создаётся init-scripts/01-init-vaultwarden-db.sql при первом запуске.
+VW_DB_USER=vw_user
+VW_DB_PASSWORD=${VW_DB_PASSWORD}
+VW_DB_NAME=vaultwarden
+
+# ── pgAdmin ───────────────────────────────────────────────────────────────────
+PGADMIN_EMAIL=${PGADMIN_EMAIL}
+PGADMIN_PASSWORD=${PGADMIN_PASSWORD}
 EOF
     chmod 600 "$ENV_FILE"
     log_info ".env создан (права: 600)"
@@ -135,22 +161,32 @@ log_step "Запуск Docker-сервисов"
 docker compose up -d
 log_info "Сервисы запущены"
 
+# ── Запись маркера деплоя ────────────────────────────────────────────────────
+echo "$(date -u '+%Y-%m-%d %H:%M:%S UTC') on $(hostname)" > "$DEPLOYED_MARKER"
+log_info "Маркер .deployed записан"
+
 # ── Итоговая сводка ───────────────────────────────────────────────────────────
+# shellcheck source=.env
+source "$ENV_FILE"
 VM_IP="$(hostname -I | awk '{print $1}')"
 
 echo ""
 echo -e "${CYAN}╔══════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║          vm-DevOps-01 готов!                     ║${NC}"
+echo -e "${CYAN}║              vm-db-01 готов!                     ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "  Dockhand UI:  http://${VM_IP}:3000"
+echo -e "  Vaultwarden: http://${VM_IP}:8080"
+echo -e "  pgAdmin:     http://${VM_IP}:5050"
 echo ""
-echo -e "  ${YELLOW}⚠  При первом входе аутентификация отключена.${NC}"
-echo -e "     Включить: Settings → Authentication"
+echo -e "  pgAdmin email:    ${YELLOW}${PGADMIN_EMAIL}${NC}"
+echo -e "  pgAdmin password: ${YELLOW}${PGADMIN_PASSWORD}${NC}"
 echo ""
 echo -e "  Статус:  docker compose ps"
-echo -e "  Логи:    docker compose logs -f dockhand"
+echo -e "  Логи:    docker compose logs -f"
 echo ""
 echo -e "  Для настройки FRP-туннеля:"
-echo -e "    sudo bash ${DEPLOY_DIR}/frpc-setup.sh"
+echo -e "    sudo bash ${DEPLOY_DIR}/frp-setup.sh"
+echo ""
+echo -e "  Для добавления агента Dockhand (Hawser):"
+echo -e "    sudo bash ${DEPLOY_DIR}/run-hawser.sh"
 echo ""
