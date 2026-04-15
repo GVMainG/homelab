@@ -55,13 +55,9 @@ log_info "Получение изменений..."
 git fetch origin main --quiet
 git checkout -f origin/main -- "$SPARSE_PATH/"
 
-# Переместить содержимое подкаталога в корень
-shopt -s dotglob nullglob
-for item in "$SPARSE_PATH"/*; do
-    mv -f "$item" "./"
-done
+# Переместить содержимое подкаталога в корень (cp мерджит директории)
+cp -r "$SPARSE_PATH/." "./"
 rm -rf "$SPARSE_PATH"
-shopt -u dotglob
 
 log_info "Файлы в: ${DEPLOY_DIR}/"
 

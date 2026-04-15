@@ -24,13 +24,9 @@ git fetch origin main --quiet
 # Извлечь только содержимое vm-DevOps-01/ из remote
 git checkout -f origin/main -- "$SPARSE_PATH/"
 
-# Переместить содержимое подкаталога в корень
+# Переместить содержимое подкаталога в корень (cp мерджит директории)
 echo "[sync] Распаковка файлов..."
-shopt -s dotglob nullglob
-for item in "$SPARSE_PATH"/*; do
-    mv -f "$item" "./"
-done
+cp -r "$SPARSE_PATH/." "./"
 rm -rf "$SPARSE_PATH"
-shopt -u dotglob
 
 echo "[sync] Готово. Рабочий каталог: ${TARGET_DIR}/"
