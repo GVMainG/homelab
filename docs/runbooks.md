@@ -44,69 +44,159 @@
 
 **Когда применять:** Первичная установка на новом VPS или полная переустановка.
 
-**Предусловия:** Windows ПК с OpenSSH, VPS на Debian 12 с SSH-доступом от root.
+**Предусловия:** VPS на Debian 12 с SSH-доступом от root.
 
 **Шаги:**
 
-1. На Windows — скопировать файлы и запустить setup.sh:
+1. Bootstrap одной командой на VPS:
 
-   ```powershell
-   cd C:\путь\к\homelab
-   .\vps-ru-proxy\deploy.ps1
-   # Скрипт интерактивно запросит IP VPS, пользователя, SSH-ключ
-   # На вопрос "Запустить setup.sh?" ответить Y
+   ```bash
+   bash <(curl -fsSL https://raw.githubusercontent.com/GVMainG/homelab/main/vps-ru-proxy/first-deployment.sh)
    ```
 
-2. setup.sh выполнит на VPS: apt upgrade, установку Docker, генерацию `.env` (токен FRP, пароль дашборда), настройку frps из шаблона, fail2ban, запуск `docker compose up -d`.
+   Скрипт выполнит: клонирование репо (sparse checkout), `apt upgrade`, установку Docker, fail2ban, запуск NPM.
 
-3. После завершения setup.sh запишет вывод — сохранить `FRP_TOKEN` и `FRP_DASHBOARD_PASSWORD`.
+2. После завершения — запустить FRP-сервер:
+
+   ```bash
+   sudo bash /opt/homelab/vps-ru-proxy/frp-setup.sh
+   # Выбрать: 2) Сервер
+   # Токен и пароль дашборда будут сгенерированы автоматически — сохранить их
+   ```
 
 **Проверка:**
 
 ```bash
-ssh root@VPS_IP "cd /opt/vps-ru-proxy && docker compose ps"
-# Все сервисы: npm (healthy), frps (Up)
+# NPM запущен
+docker compose -f /opt/homelab/vps-ru-proxy/docker-compose.yml ps
 # NPM UI: http://VPS_IP:81
+
+# frps запущен
+docker ps | grep frps
 # frps dashboard: http://VPS_IP:7500
 ```
 
-**Откат:** `docker compose down` на VPS. Удалить `/opt/vps-ru-proxy`.
+**Откат:** `docker compose down` (NPM) + `docker stop frps && docker rm frps`. Удалить `/opt/homelab/vps-ru-proxy`.
 
 ---
 
-## Настройка frpc на vm-db-01
+## Настройка FRP-туннеля на LAN-VM
 
-**Когда применять:** Подключение vm-db-01 к VPS-туннелю после развёртывания vps-ru-proxy.
+**Когда применять:** Подключение vm-db-01 или vm-DevOps-01 к VPS-туннелю после развёртывания vps-ru-proxy.
 
-**Предусловия:** VPS-стек запущен, известны IP VPS и FRP_TOKEN (из вывода setup.sh или `/opt/vps-ru-proxy/.env`).
+**Предусловия:** frps на VPS запущен, известны IP VPS и FRP_TOKEN (из вывода `frp-setup.sh` на VPS).
 
 **Шаги:**
 
-1. SSH на vm-db-01:
+1. SSH на VM:
 
    ```bash
-   ssh user-home@192.168.1.36
-   cd /opt/homelab
+   ssh user-home@192.168.1.36   # vm-db-01
+   # или ssh user-home@192.168.1.XX   # vm-DevOps-01
    ```
 
 2. Запустить интерактивный скрипт:
 
    ```bash
-   sudo bash vm-db-01/frpc-setup.sh
-   # Ввести: IP VPS, FRP_TOKEN, порты (дефолты: 7000, 18080, 15050)
+   sudo bash /opt/homelab/vm-db-01/frp-setup.sh
+   # Выбрать: 1) Клиент
+   # Ввести: IP VPS, FRP_TOKEN, порты (дефолты: vaultwarden=18080, pgadmin=15050)
    ```
 
-3. Скрипт создаст `vm-db-01/frpc/frpc.toml` (права 600) и `frpc/docker-compose.yml`, запустит контейнер.
+   Скрипт создаст `frp/frpc.toml` (права 600) и запустит `docker run frpc --network host`.
 
 **Проверка:**
 
 ```bash
-docker compose -f /opt/homelab/vm-db-01/frpc/docker-compose.yml ps
-docker compose -f /opt/homelab/vm-db-01/frpc/docker-compose.yml logs -f
+docker ps | grep frpc
+docker logs -f frpc
 # На VPS: http://VPS_IP:7500 — в дашборде должны появиться активные туннели
 ```
 
-**Откат:** `docker compose -f frpc/docker-compose.yml down`
+**Откат:** `docker stop frpc && docker rm frpc`
+
+---
+
+## Первичный деплой новой VM (first-deployment.sh)
+
+**Когда применять:** Создание новой VM в Proxmox и первичное развёртывание сервисов.
+
+**Предусловия:** VM на Debian 12, SSH-доступ от root, интернет.
+
+**Шаги:**
+
+1. Bootstrap одной командой (запускать **от root** прямо на VM):
+
+   ```bash
+   # vm-db-01
+   bash <(curl -fsSL https://raw.githubusercontent.com/GVMainG/homelab/main/vm-db-01/first-deployment.sh)
+
+   # vm-DevOps-01
+   bash <(curl -fsSL https://raw.githubusercontent.com/GVMainG/homelab/main/vm-DevOps-01/first-deployment.sh)
+   ```
+
+   Скрипт: клонирует репо (sparse checkout в `/opt/homelab`), обновляет систему, ставит Docker, генерирует `.env`, запускает `docker compose up -d`.
+
+2. Записать учётные данные из вывода скрипта.
+
+3. Опционально — настроить FRP и Hawser:
+
+   ```bash
+   sudo bash /opt/homelab/<vm>/frp-setup.sh    # настроить туннель
+   sudo bash /opt/homelab/<vm>/run-hawser.sh   # подключить к Dockhand
+   ```
+
+**Проверка:**
+
+```bash
+docker compose -f /opt/homelab/<vm>/docker-compose.yml ps
+# Все сервисы: Up/healthy
+ls /opt/homelab/<vm>/.deployed   # маркер деплоя должен существовать
+```
+
+**Особенность:** При повторном запуске `first-deployment.sh` показывает предупреждение и требует подтверждения. Для обновления конфигов используйте `sync.sh`.
+
+**Откат:** `docker compose down`, удалить `.deployed` маркер, повторить при необходимости.
+
+---
+
+## Добавление агента Dockhand (Hawser) на VM
+
+**Когда применять:** Подключение vm-db-01 или другой VM к Dockhand для удалённого управления.
+
+**Предусловия:** Dockhand запущен на vm-DevOps-01, Docker установлен на целевой VM.
+
+**Шаги:**
+
+1. SSH на целевую VM:
+
+   ```bash
+   ssh user-home@192.168.1.36
+   ```
+
+2. Запустить скрипт:
+
+   ```bash
+   sudo bash /opt/homelab/vm-db-01/run-hawser.sh
+   # Выбрать режим:
+   #   1) Standard — если VM в той же LAN, что и Dockhand
+   #   2) Edge     — если VM за NAT или нет прямого доступа от Dockhand
+   # Ввести токен (придумать любой) и имя агента
+   ```
+
+3. В Dockhand UI (`http://192.168.1.XX:3000`): **Agents → Add Agent**
+   - Режим Standard: Host = IP VM, Port = 2376, Token = (указанный токен)
+   - Режим Edge: агент подключается сам, появится в списке автоматически
+
+**Проверка:**
+
+```bash
+docker ps | grep hawser
+docker logs -f hawser
+# В Dockhand UI: агент отображается в Agents со статусом Connected
+```
+
+**Откат:** `docker stop hawser && docker rm hawser`
 
 ---
 

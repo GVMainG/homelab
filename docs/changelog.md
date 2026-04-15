@@ -39,6 +39,21 @@
 
 ## 2026-04
 
+### 2026-04-15 — Стандартизация скриптов деплоя всех VM
+
+- **Тип:** changed, removed
+- **VM:** все VM (vm-db-01, vm-DevOps-01, vps-ru-proxy)
+- **Описание:** Удалены `setup.sh`, `frpc-setup.sh`, `deploy.ps1`. Вместо них — единые скрипты для каждой VM: `first-deployment.sh` (начальный деплой: клонирует репо, ставит Docker, генерирует `.env`, запускает сервисы; маркер `.deployed` защищает от повторного запуска), `frp-setup.sh` (настройка FRP — выбор клиент/сервер — запускает `docker run`), `run-hawser.sh` (запуск агента Dockhand через `docker run`). Добавлен `vps-ru-proxy/sync.sh`.
+- **Коммит:** 1eed800
+
+### 2026-04-15 — Добавлена vm-DevOps-01 с Dockhand
+
+- **Тип:** added
+- **VM:** vm-DevOps-01 (новый)
+- **Описание:** Создана VM для управления Docker-инфраструктурой homelab. Развёрнут Dockhand (`fnsys/dockhand:latest`) — веб-интерфейс для управления контейнерами, Compose-стеками, логами и терминалом. Порт :3000. `ENCRYPTION_KEY` (AES-256) генерируется `first-deployment.sh` — нельзя менять после первого запуска. Удалённый доступ через frpc туннель :3000 → VPS:13000. Агент Hawser на других VM подключается к Dockhand для удалённого управления.
+- **Версии:** `fnsys/dockhand:latest`
+- **Коммиты:** e22225c, 1eed800
+
 ### 2026-04-15 — Перевод NPM с MariaDB на встроенный SQLite
 
 - **Тип:** changed, removed

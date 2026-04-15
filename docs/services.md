@@ -92,21 +92,62 @@
 
 - **Назначение:** Создаёт исходящий туннель от vm-db-01 к frps на VPS, пробрасывая локальные порты для доступа из интернета через NPM.
 - **Образ:** `snowdreamtech/frpc:latest`
-- **Сеть:** `network_mode: host` — контейнер видит `127.0.0.1` хоста, что позволяет подключаться к Vaultwarden и pgAdmin по их локальным портам.
-- **Конфиг:** `frpc/frpc.toml` (генерируется `frpc-setup.sh`, права 600, не коммитится в git)
-- **Volumes:** `./frpc.toml:/etc/frp/frpc.toml:ro`
-- **Healthcheck:** `pgrep frpc` каждые 30с
+- **Запуск:** `docker run --network host` — контейнер видит `127.0.0.1` хоста, что позволяет подключаться к Vaultwarden и pgAdmin по их локальным портам.
+- **Конфиг:** `frp/frpc.toml` (генерируется `frp-setup.sh`, права 600, не коммитится в git)
 - **Туннели (remotePort на VPS → localPort на vm-db-01):**
   - `18080` → `8080` (Vaultwarden)
   - `15050` → `5050` (pgAdmin)
-- **Установка:** `sudo bash vm-db-01/frpc-setup.sh` — интерактивный скрипт, запрашивает IP VPS, токен, порты.
+- **Установка:** `sudo bash vm-db-01/frp-setup.sh` → выбрать режим `1) Клиент`, ввести IP VPS, токен, порты.
+- **Управление:** `docker logs -f frpc` / `docker stop frpc && docker rm frpc`
+- **Документация:** [github.com/fatedier/frp](https://github.com/fatedier/frp)
+
+### Hawser (агент Dockhand)
+
+- **Назначение:** Агент, который позволяет Dockhand управлять Docker на vm-db-01 удалённо (просмотр контейнеров, запуск стеков, терминал).
+- **Образ:** `ghcr.io/finsys/hawser:latest`
+- **Запуск:** `docker run` — два режима:
+  - **Standard:** `-p 2376:2376` — агент слушает порт, Dockhand подключается (подходит для LAN)
+  - **Edge:** `-e DOCKHAND_SERVER_URL=...` — агент сам подключается к Dockhand по WebSocket (подходит для NAT)
+- **Установка:** `sudo bash vm-db-01/run-hawser.sh` — интерактивный выбор режима, токена, имени агента.
+- **Управление:** `docker logs -f hawser` / `docker stop hawser && docker rm hawser`
+- **Документация:** [github.com/Finsys/hawser](https://github.com/Finsys/hawser)
+
+---
+
+## vm-DevOps-01 (192.168.1.XX)
+
+### Dockhand
+
+- **Назначение:** Веб-интерфейс управления Docker-инфраструктурой homelab: контейнеры, Compose-стеки, логи, терминал, удалённые агенты.
+- **Образ:** `fnsys/dockhand:latest` (нет стабильных версионированных тегов)
+- **Порты:** `3000:3000` (веб-UI)
+- **Переменные окружения:**
+  - `ENCRYPTION_KEY` — AES-256 ключ для шифрования учётных данных (из `.env`). **Нельзя менять после первого запуска** — сохранённые credentials станут нечитаемыми.
+  - `PUID`, `PGID` — UID/GID пользователя внутри контейнера
+- **Volumes:** `dockhand-data` → `/app/data` (SQLite, git-репо стеков)
+- **Healthcheck:** `wget -qO- http://localhost:3000` каждые 30с
+- **Особенности:**
+  - Аутентификация отключена при первом запуске — включить в Settings → Authentication
+  - Управляет локальным Docker через `/var/run/docker.sock`
+  - Удалённые VM управляются через агентов Hawser (`run-hawser.sh`)
+- **Документация:** [github.com/Finsys/dockhand](https://github.com/Finsys/dockhand)
+
+### frpc (FRP-клиент, Dockhand → VPS)
+
+- **Назначение:** Создаёт исходящий туннель от vm-DevOps-01 к frps на VPS для доступа к Dockhand UI из интернета.
+- **Образ:** `snowdreamtech/frpc:latest`
+- **Запуск:** `docker run --network host`
+- **Конфиг:** `frp/frpc.toml` (генерируется `frp-setup.sh`, права 600)
+- **Туннели (remotePort на VPS → localPort на vm-DevOps-01):**
+  - `13000` → `3000` (Dockhand)
+- **Установка:** `sudo bash vm-DevOps-01/frp-setup.sh` → выбрать `1) Клиент`
 - **Документация:** [github.com/fatedier/frp](https://github.com/fatedier/frp)
 
 ---
 
 ## vps-ru-proxy (Timeweb VPS, Debian 12)
 
-Стек развёртывается скриптом `vps-ru-proxy/setup.sh`. Конфиги и образы — в `vps-ru-proxy/`.
+Стек развёртывается скриптом `vps-ru-proxy/first-deployment.sh`. Конфиги и образы — в `vps-ru-proxy/`.
 
 ### Nginx Proxy Manager
 
@@ -124,14 +165,14 @@
 
 ### frps (FRP-сервер)
 
-- **Назначение:** Принимает входящие туннельные соединения от frpc на vm-db-01.
+- **Назначение:** Принимает входящие туннельные соединения от frpc на LAN-VM, открывает remotePort для каждого туннеля.
 - **Образ:** `snowdreamtech/frps:latest`
-- **Порты:** `7000:7000` (bind port для frpc), `7500:7500` (веб-дашборд)
-- **Сеть:** `proxy-net` (bridge)
-- **Конфиг:** `frps/frps.toml` (генерируется из шаблона `frps.toml` через `envsubst` в setup.sh; содержит токен — не коммитить).
-- **Volumes:** `./frps/frps.toml:/etc/frp/frps.toml:ro`
-- **Переменные:** `FRP_TOKEN`, `FRP_DASHBOARD_PASSWORD` — из `.env`.
+- **Запуск:** `docker run --network host` — все порты напрямую на хосте VPS.
+- **Порты (хост):** `7000` (bind port для frpc), `7500` (веб-дашборд), динамические remotePort (18080, 15050, 13000 и т.д.)
+- **Конфиг:** `frp/frps.toml` (генерируется `frp-setup.sh`, права 600, содержит токен — не коммитить).
+- **Установка:** `sudo bash vps-ru-proxy/frp-setup.sh` → выбрать `2) Сервер`, токен и пароль дашборда генерируются автоматически.
 - **Особенности:**
-  - Веб-дашборд доступен напрямую по `http://VPS_IP:7500` и через NPM как `https://frp-ui.gv-services.net.ru`.
-  - При проксировании через NPM Forward Hostname = `frps` (container DNS в proxy-net), Scheme = `http`.
+  - Веб-дашборд: `http://VPS_IP:7500` / `https://frp-ui.gv-services.net.ru`
+  - frps работает в `--network host`, NPM — в bridge `proxy-net`. Для проксирования туннелей в NPM использовать IP хоста VPS (не `frps` и не `127.0.0.1`): Forward Hostname = `VPS_IP`, Port = `<remotePort>`.
+- **Управление:** `docker logs -f frps` / `docker stop frps && docker rm frps`
 - **Документация:** [github.com/fatedier/frp](https://github.com/fatedier/frp)

@@ -29,13 +29,13 @@
 
 ## Минимальные требования к VM
 
-| Ресурс | vm-db-01 |
-|---|---|
-| CPU | 2 vCPU |
-| RAM | 2 GB |
-| Disk | 20 GB |
-| ОС | Ubuntu Server 22.04 LTS / Debian 12 |
-| Сеть | LAN 192.168.1.0/24, static IP |
+| Ресурс | vm-db-01 | vm-DevOps-01 |
+| --- | --- | --- |
+| CPU | 2 vCPU | 1 vCPU |
+| RAM | 2 GB | 1 GB |
+| Disk | 20 GB | 10 GB |
+| ОС | Debian 12 | Debian 12 |
+| Сеть | LAN 192.168.1.0/24, static IP | LAN 192.168.1.0/24, static IP |
 
 ---
 
@@ -113,6 +113,49 @@ nano .env
 cd /opt/homelab/vm-db-01
 docker compose up -d --remove-orphans
 docker compose ps    # проверить что все healthy
+```
+
+---
+
+## vm-DevOps-01 (192.168.1.XX)
+
+### Создание VM в Proxmox (vm-DevOps-01)
+
+```bash
+# На Proxmox хосте
+qm create 102 --name vm-devops-01 --memory 1024 --cores 1
+qm importdisk 102 /path/to/debian-12-generic-amd64.iso local-lvm
+qm set 102 --scsihw virtio-scsi-pci --scsi0 local-lvm:vm-102-disk-0
+qm set 102 --net0 virtio,bridge=vmbr0
+qm set 102 --boot order=scsi0
+qm start 102
+```
+
+### Установка ОС (vm-DevOps-01)
+
+- Загрузиться с ISO, установить Debian 12
+- Static IP: `192.168.1.XX/24`, gateway `192.168.1.1`, DNS `8.8.8.8`
+- Пользователь: `user-home`, настроить SSH ключ
+
+### Первичный деплой (vm-DevOps-01)
+
+Bootstrap одной командой от root:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/GVMainG/homelab/main/vm-DevOps-01/first-deployment.sh)
+```
+
+Скрипт: клонирует репо, ставит Docker, генерирует `.env` (ENCRYPTION_KEY), запускает Dockhand.
+
+### После деплоя (vm-DevOps-01)
+
+```bash
+# Настроить FRP-туннель (Dockhand :3000 → VPS :13000)
+sudo bash /opt/homelab/vm-DevOps-01/frp-setup.sh
+
+# Открыть Dockhand UI
+# http://192.168.1.XX:3000
+# Settings → Authentication → включить аутентификацию
 ```
 
 ---
