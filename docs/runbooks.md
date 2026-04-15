@@ -57,7 +57,7 @@
    # На вопрос "Запустить setup.sh?" ответить Y
    ```
 
-2. setup.sh выполнит на VPS: apt upgrade, установку Docker, генерацию `.env` (токен FRP, пароли MariaDB), настройку frps из шаблона, fail2ban, запуск `docker compose up -d`.
+2. setup.sh выполнит на VPS: apt upgrade, установку Docker, генерацию `.env` (токен FRP, пароль дашборда), настройку frps из шаблона, fail2ban, запуск `docker compose up -d`.
 
 3. После завершения setup.sh запишет вывод — сохранить `FRP_TOKEN` и `FRP_DASHBOARD_PASSWORD`.
 
@@ -65,7 +65,7 @@
 
 ```bash
 ssh root@VPS_IP "cd /opt/vps-ru-proxy && docker compose ps"
-# Все сервисы: npm (healthy), npm-db (healthy), frps (Up)
+# Все сервисы: npm (healthy), frps (Up)
 # NPM UI: http://VPS_IP:81
 # frps dashboard: http://VPS_IP:7500
 ```

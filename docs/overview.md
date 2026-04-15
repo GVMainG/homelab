@@ -60,7 +60,7 @@ vm-db-01 (192.168.1.36)
 | VM | IP | ОС | Роль | Сервисы |
 |---|---|---|---|---|
 | `vm-db-01` | 192.168.1.36 | Linux | База данных + менеджмент | PostgreSQL 16, Vaultwarden, pgAdmin 4, frpc |
-| `vps-ru-proxy` | публичный IP | Debian 12 (Timeweb) | Обратный прокси + FRP-сервер | NPM, MariaDB, frps |
+| `vps-ru-proxy` | публичный IP | Debian 12 (Timeweb) | Обратный прокси + FRP-сервер | NPM (SQLite), frps |
 
 **Хост vm-db-01:** Proxmox VE, сеть LAN `192.168.1.0/24`
 
@@ -94,5 +94,5 @@ NPM (vps-ru-proxy) ────────▶ frps:7500 (proxy-net, container D
 
 Docker networks:
   db-net    (bridge) — vm-db-01: postgres, vaultwarden, pgadmin
-  proxy-net (bridge) — vps-ru-proxy: npm, npm-db, frps
+  proxy-net (bridge) — vps-ru-proxy: npm, frps
 ```

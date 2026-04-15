@@ -115,21 +115,12 @@
 - **Порты:** `80:80`, `443:443`, `81:81` (UI администрирования)
 - **Сеть:** `proxy-net` (bridge)
 - **Volumes:** `./npm/data:/data`, `./npm/letsencrypt:/etc/letsencrypt`
-- **Зависимости:** `depends_on: npm-db (condition: service_healthy)`
+- **БД:** SQLite — файл `/data/database.sqlite` внутри volume `./npm/data`. MariaDB не нужна.
 - **Особенности:**
   - Первый вход: `admin@example.com` / `changeme` — сменить сразу.
   - Proxy Host для туннельных сервисов: Scheme `http`, Forward Hostname — имя контейнера `frps`, WebSockets включить для Vaultwarden.
   - `Force SSL` включать только после получения сертификата Let's Encrypt.
 - **Документация:** [nginxproxymanager.com](https://nginxproxymanager.com/guide/)
-
-### MariaDB (npm-db)
-
-- **Назначение:** Внутренняя БД Nginx Proxy Manager. Не публикуется на хост.
-- **Образ:** `jc21/mariadb-aria:latest`
-- **Сеть:** `proxy-net` (bridge)
-- **Переменные окружения:** `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE=npm`, `MYSQL_USER=npm`, `MYSQL_PASSWORD` — из `.env` (генерируется setup.sh).
-- **Volumes:** `./npm/mysql:/var/lib/mysql`
-- **Healthcheck:** `mysqladmin ping -h localhost` каждые 10с
 
 ### frps (FRP-сервер)
 

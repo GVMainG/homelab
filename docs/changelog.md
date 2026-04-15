@@ -39,6 +39,13 @@
 
 ## 2026-04
 
+### 2026-04-15 — Перевод NPM с MariaDB на встроенный SQLite
+
+- **Тип:** changed, removed
+- **VM:** vps-ru-proxy
+- **Описание:** Удалён сервис `npm-db` (MariaDB) из `vps-ru-proxy/docker-compose.yml`. NPM по умолчанию использует SQLite — MariaDB была запущена, но не подключена (NPM не имел переменных `DB_MYSQL_*`). Файл `database.sqlite` (114 КБ) подтверждён в `./npm/data/`. Применить на VPS: `docker compose up -d --remove-orphans`. Опциональная очистка: `rm -rf /opt/vps-ru-proxy/npm/mysql`.
+- **Коммит:** a908668
+
 ### 2026-04-14 — Добавлен VPS-стек обратного прокси и frpc-клиент на vm-db-01
 
 - **Тип:** added
