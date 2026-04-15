@@ -1,22 +1,36 @@
 #!/usr/bin/env bash
-# sync.sh — обновить vm-DevOps-01 из git-репозитория (sparse checkout).
+# sync.sh — обновить vm-DevOps-01 из git-репозитория.
+# Извлекает ТОЛЬКО содержимое vm-DevOps-01/ прямо в /opt/vm-DevOps-01/.
+# Локальные файлы (.env, данные Dockhand) НЕ перезаписываются.
 # Идемпотентен: безопасно запускать повторно.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-
 REPO_URL="https://github.com/GVMainG/homelab.git"
-CLONE_DIR="/opt/homelab"
+TARGET_DIR="/opt/vm-DevOps-01"
 SPARSE_PATH="vm-DevOps-01"
 
-if [[ -d "${CLONE_DIR}/.git" ]]; then
-    echo "[sync] Репозиторий существует — git pull..."
-    git -C "${CLONE_DIR}" pull
-else
-    echo "[sync] Клонирование (sparse checkout)..."
-    git clone --filter=blob:none --sparse --branch main "${REPO_URL}" "${CLONE_DIR}"
-    git -C "${CLONE_DIR}" sparse-checkout set "${SPARSE_PATH}"
+cd "$TARGET_DIR"
+
+# Инициализация репозитория если нет
+if [[ ! -d ".git" ]]; then
+    echo "[sync] Инициализация репозитория..."
+    git init -q
+    git remote add origin "$REPO_URL"
 fi
 
-echo "[sync] Готово. Рабочий каталог: ${CLONE_DIR}/${SPARSE_PATH}/"
+echo "[sync] Получение изменений..."
+git fetch origin main --quiet
+
+# Извлечь только содержимое vm-DevOps-01/ из remote
+git checkout -f origin/main -- "$SPARSE_PATH/"
+
+# Переместить содержимое подкаталога в корень
+echo "[sync] Распаковка файлов..."
+shopt -s dotglob nullglob
+for item in "$SPARSE_PATH"/*; do
+    mv -f "$item" "./"
+done
+rm -rf "$SPARSE_PATH"
+shopt -u dotglob
+
+echo "[sync] Готово. Рабочий каталог: ${TARGET_DIR}/"

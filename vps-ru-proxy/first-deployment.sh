@@ -5,10 +5,11 @@
 # Bootstrap (одна команда):
 #   bash <(curl -fsSL https://raw.githubusercontent.com/GVMainG/homelab/main/vps-ru-proxy/first-deployment.sh)
 #
+# Структура на VPS: /opt/vps-ru-proxy/[содержимое VM] — без лишних папок.
 # Запускает только NPM. Для FRP-сервера после деплоя запустите frp-setup.sh.
 #
 # Защита от повторного запуска: при наличии маркера .deployed скрипт остановится.
-# Для переустановки: rm /opt/homelab/vps-ru-proxy/.deployed && bash first-deployment.sh
+# Для переустановки: rm /opt/vps-ru-proxy/.deployed && bash first-deployment.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,30 +34,40 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-# ── Шаг 1: Синхронизация репозитория ─────────────────────────────────────────
-log_step "Синхронизация репозитория homelab"
-
+DEPLOY_DIR="/opt/vps-ru-proxy"
 REPO_URL="https://github.com/GVMainG/homelab.git"
-CLONE_DIR="/opt/homelab"
 SPARSE_PATH="vps-ru-proxy"
+
+mkdir -p "$DEPLOY_DIR"
+cd "$DEPLOY_DIR"
+
+# ── Шаг 1: Получение файлов VM из репозитория ────────────────────────────────
+log_step "Получение конфигурации из репозитория"
 
 if ! command -v git &>/dev/null; then
     apt-get update -qq
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git
 fi
 
-if [[ -d "${CLONE_DIR}/.git" ]]; then
-    log_info "Репозиторий существует — git pull..."
-    git -C "${CLONE_DIR}" pull
-else
-    log_info "Клонирование (sparse checkout)..."
-    git clone --filter=blob:none --sparse --branch main "${REPO_URL}" "${CLONE_DIR}"
-    git -C "${CLONE_DIR}" sparse-checkout set "${SPARSE_PATH}"
+if [[ ! -d ".git" ]]; then
+    log_info "Инициализация репозитория..."
+    git init -q
+    git remote add origin "$REPO_URL"
 fi
 
-DEPLOY_DIR="${CLONE_DIR}/${SPARSE_PATH}"
-cd "$DEPLOY_DIR"
-log_info "Рабочий каталог: ${DEPLOY_DIR}"
+log_info "Получение изменений..."
+git fetch origin main --quiet
+git checkout -f origin/main -- "$SPARSE_PATH/"
+
+# Переместить содержимое подкаталога в корень
+shopt -s dotglob nullglob
+for item in "$SPARSE_PATH"/*; do
+    mv -f "$item" "./"
+done
+rm -rf "$SPARSE_PATH"
+shopt -u dotglob
+
+log_info "Файлы в: ${DEPLOY_DIR}/"
 
 # ── Защита от повторного запуска ──────────────────────────────────────────────
 DEPLOYED_MARKER="${DEPLOY_DIR}/.deployed"
