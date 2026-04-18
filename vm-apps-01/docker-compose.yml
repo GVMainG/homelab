@@ -1,0 +1,35 @@
+# Веб-интерфейс для загрузки видео с YouTube и других платформ
+services:
+  metube:
+    # Образ: ghcr.io/alexta69/metube (на основе yt-dlp)
+    image: ghcr.io/alexta69/metube:latest
+    container_name: metube
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Формат видео: лучшее видео + лучший звук или лучший общий файл
+      YTDL_FORMAT: ${YTDL_FORMAT:-bestvideo+bestaudio/best}
+      # Формат извлекаемого звука (mp3, m4a, opus, vorbis, wav, aac)
+      YTDL_EXTRACT_AUDIO_FORMAT: ${YTDL_EXTRACT_AUDIO_FORMAT:-m4a}
+      # Качество звука в кбит/с
+      YTDL_EXTRACT_AUDIO_QUALITY: ${YTDL_EXTRACT_AUDIO_QUALITY:-192}
+      # Сохранять оригинальный звук при извлечении
+      YTDL_KEEP_ORIGINAL_AUDIO: ${YTDL_KEEP_ORIGINAL_AUDIO:-false}
+      # Использовать FFI для выбора формата
+      YTDL_PREFER_FFI: ${YTDL_PREFER_FFI:-false}
+    ports:
+      # Веб-интерфейс доступен на порту 8081
+      - "8081:8081"
+    volumes:
+      # Том для сохранения загруженных видео
+      - metube-downloads:/downloads
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8081/"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 30s
+
+# Именованные томы
+volumes:
+  metube-downloads:

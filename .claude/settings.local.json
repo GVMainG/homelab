@@ -90,7 +90,8 @@
       "Bash(gh repo *)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:dockhand.pro)"
+      "WebFetch(domain:dockhand.pro)",
+      "WebSearch"
     ]
   }
 }
