@@ -48,10 +48,13 @@ LAN (192.168.1.0/24)
    │     └── :5050 → pgAdmin
    │           └── db-net (bridge) — изолированная сеть для db-сервисов
    │
-   └─▶ vm-DevOps-01 (192.168.1.XX)
-         ├── frpc (network_mode: host) — пробрасывает Dockhand в туннель
-         │     └── remotePort :13000 ← localPort :3000 (Dockhand)
-         └── :3000 → Dockhand UI
+   ├─▶ vm-DevOps-01 (192.168.1.XX)
+   │     ├── frpc (network_mode: host) — пробрасывает Dockhand в туннель
+   │     │     └── remotePort :13000 ← localPort :3000 (Dockhand)
+   │     └── :3000 → Dockhand UI
+   │
+   └─▶ vm-apps-01 (192.168.1.YY)
+         └── :8081 → MeTube (веб-интерфейс для yt-dlp)
 ```
 
 Сервисы доступны двумя путями:
@@ -65,6 +68,7 @@ LAN (192.168.1.0/24)
 |---|---|---|---|---|
 | `vm-db-01` | 192.168.1.36 | Debian 12 | База данных + менеджмент | PostgreSQL 16, Vaultwarden, pgAdmin 4, frpc |
 | `vm-DevOps-01` | 192.168.1.XX | Debian 12 | Docker management | Dockhand, frpc |
+| `vm-apps-01` | 192.168.1.YY | Debian 12 | Прикладные сервисы | MeTube |
 | `vps-ru-proxy` | публичный IP | Debian 12 (Timeweb) | Обратный прокси + FRP-сервер | NPM (SQLite), frps |
 
 **Хост LAN-VM:** Proxmox VE, сеть `192.168.1.0/24`
@@ -86,6 +90,7 @@ LAN (192.168.1.0/24)
 | Vaultwarden | vm-db-01 | 8080 | `http://192.168.1.36:8080` | LAN / через туннель |
 | pgAdmin | vm-db-01 | 5050 | `http://192.168.1.36:5050` | LAN / через туннель |
 | Dockhand UI | vm-DevOps-01 | 3000 | `http://192.168.1.XX:3000` | LAN / через туннель |
+| MeTube | vm-apps-01 | 8081 | `http://192.168.1.YY:8081` | LAN |
 | Nginx Proxy Manager UI | vps-ru-proxy | 81 | `http://VPS_IP:81` | публичный |
 | frps веб-дашборд | vps-ru-proxy | 7500 | `http://VPS_IP:7500` / `https://frp-ui.gv-services.net.ru` | публичный |
 

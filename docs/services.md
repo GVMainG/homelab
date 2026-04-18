@@ -145,6 +145,30 @@
 
 ---
 
+## vm-apps-01 (192.168.1.YY)
+
+### MeTube
+
+- **Назначение:** Веб-интерфейс для загрузки видео с YouTube и других видеоплатформ, основан на yt-dlp.
+- **Образ:** `ghcr.io/alexta69/metube:latest`
+- **Порты:** `8081:8081` (веб-UI)
+- **Переменные окружения:**
+  - `YTDL_FORMAT` — формат загрузки видео (по умолчанию `bestvideo+bestaudio/best`)
+  - `YTDL_EXTRACT_AUDIO_FORMAT` — формат извлекаемого звука (mp3, m4a, opus, vorbis, wav, aac)
+  - `YTDL_EXTRACT_AUDIO_QUALITY` — качество звука в кбит/с (128, 192, 256, 320)
+  - `YTDL_KEEP_ORIGINAL_AUDIO` — сохранять оригинальный звук при извлечении (true/false)
+  - `YTDL_PREFER_FFI` — использовать новый движок выбора формата (true/false)
+- **Volumes:** `metube-downloads` → `/downloads` (хранение загруженных видео)
+- **Healthcheck:** `curl -f http://localhost:8081/` каждые 30с
+- **Особенности:**
+  - Нет зависимостей от БД
+  - Веб-интерфейс доступен на LAN: `http://192.168.1.YY:8081`
+  - Загруженные видео сохраняются в Docker volume для сохранения при обновлении контейнера
+- **Управление:** `docker compose logs -f metube` / `docker compose ps`
+- **Документация:** [github.com/alexta69/metube](https://github.com/alexta69/metube)
+
+---
+
 ## vps-ru-proxy (Timeweb VPS, Debian 12)
 
 Стек развёртывается скриптом `vps-ru-proxy/first-deployment.sh`. Конфиги и образы — в `vps-ru-proxy/`.
