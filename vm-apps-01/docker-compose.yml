@@ -45,10 +45,10 @@ services:
       SECRET_KEY: ${PLANKA_SECRET_KEY}
       # Разрешить регистрацию новых пользователей
       ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
-      # Email админа для создания при первом запуске
-      ADMIN_EMAIL: ${ADMIN_EMAIL}
-      # Пароль админа для создания при первом запуске
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      # Создать админа при первом запуске (Planka-специфичные переменные)
+      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD}
+      DEFAULT_ADMIN_NAME: ${DEFAULT_ADMIN_NAME}
     ports:
       # Веб-интерфейс доступен на порту 3000
       - "3000:1337"
