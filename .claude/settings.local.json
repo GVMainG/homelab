@@ -91,7 +91,9 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:dockhand.pro)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:docs.planka.cloud)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/plankanban/planka/master/docker-compose.yml\")"
     ]
   }
 }
