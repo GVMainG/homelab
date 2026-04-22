@@ -43,6 +43,12 @@ services:
       BASE_URL: http://${PLANKA_BASE_URL:-192.168.1.XX:3000}
       # SECRET_KEY для шифрования сессий — МЕНЯТЬ НЕЛЬЗЯ после первого запуска
       SECRET_KEY: ${PLANKA_SECRET_KEY}
+      # Разрешить регистрацию новых пользователей
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+      # Email админа для создания при первом запуске
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      # Пароль админа для создания при первом запуске
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     ports:
       # Веб-интерфейс доступен на порту 3000
       - "3000:1337"
