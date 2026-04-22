@@ -167,6 +167,29 @@
 - **Управление:** `docker compose logs -f metube` / `docker compose ps`
 - **Документация:** [github.com/alexta69/metube](https://github.com/alexta69/metube)
 
+### Planka
+
+- **Назначение:** Kanban-доска для управления проектами и задачами (аналог Trello).
+- **Образ:** `plankanban/planka:1.122.0`
+- **Порты:** `8082:1337` (веб-UI)
+- **БД:** PostgreSQL (на vm-db-01, заводская БД `planka`, пользователь `planka_user`)
+- **Переменные окружения:**
+  - `DATABASE_URL` — строка подключения к PostgreSQL: `postgresql://planka_user:PASSWORD@192.168.1.36:5432/planka`
+  - `BASE_URL` — базовый URL приложения для фронтенда (например, `192.168.1.YY:8082`)
+  - `SECRET_KEY` — ключ для шифрования сессий (генерируется при первом запуске)
+- **Volumes:** `planka-attachments` → `/app/attachments` (загруженные файлы, аватары, изображения доски)
+- **Зависимости:** PostgreSQL на vm-db-01
+- **Healthcheck:** `wget -qO- http://localhost:1337/health` каждые 30с
+- **Инициализация БД:**
+  - При первом запуске на vm-db-01 запустить скрипт инициализации: `docker compose up -d` автоматически создаёт пользователя и БД из `init-scripts/02-init-planka-db.sql`
+  - Сама Planka инициализирует schema при первом подключении
+- **Особенности:**
+  - Веб-интерфейс доступен на LAN: `http://192.168.1.YY:8082`
+  - При обновлении версии могут требоваться миграции БД (читать release notes)
+  - `SECRET_KEY` нельзя менять после первого запуска — encrypted данные станут нечитаемыми
+- **Управление:** `docker compose logs -f planka` / `docker compose ps`
+- **Документация:** [github.com/plankanban/planka](https://github.com/plankanban/planka)
+
 ---
 
 ## vps-ru-proxy (Timeweb VPS, Debian 12)

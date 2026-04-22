@@ -30,6 +30,33 @@ services:
     #   retries: 3
     #   start_period: 30s
 
+  planka:
+    # Kanban доска для управления проектами
+    image: plankanban/planka:1.122.0
+    container_name: planka
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Подключение к PostgreSQL на vm-db-01
+      DATABASE_URL: postgresql://${PLANKA_DB_USER}:${PLANKA_DB_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${PLANKA_DB_NAME}
+      # Базовый URL для доступа к приложению
+      BASE_URL: http://${PLANKA_BASE_URL:-192.168.1.XX:8082}
+      # Аутентификация (может быть отключена для простых развертываний)
+      SECRET_KEY: ${PLANKA_SECRET_KEY}
+    ports:
+      # Веб-интерфейс доступен на порту 8082
+      - "8082:1337"
+    volumes:
+      # Том для хранения загруженных файлов
+      - planka-attachments:/app/attachments
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:1337/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
 # Именованные томы
 volumes:
   metube-downloads:
+  planka-attachments:
