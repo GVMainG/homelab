@@ -1,7 +1,6 @@
-title: GV Services Home
-subtitle: Infrastructure Dashboard
-description: Домашний дашборд для управления сервисами
+title: GV Services
 theme: dark
-color: blue
-language: ru
+color: stone
+headerStyle: clean
 target: _blank
+language: ru
