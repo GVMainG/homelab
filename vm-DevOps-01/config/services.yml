@@ -1,0 +1,39 @@
+- Инфраструктура:
+    - NPM:
+        icon: mdi-nginx
+        description: Reverse Proxy & SSL
+        href: https://npm.gv-services.net.ru/
+
+    - Dockhand:
+        icon: mdi-docker
+        description: Docker Management
+        href: https://dockhand.gv-services.net.ru/
+        server: dockhand
+        container: dockhand
+
+    - FRP:
+        icon: mdi-network
+        description: Fast Reverse Proxy
+        href: "https://frp.gv-services.net.ru/static/#/"
+
+    - Proxmox:
+        icon: mdi-server
+        description: Hypervisor
+        href: "https://192.168.1.6:8006/#v1:0:=node%2Fnode1:4:::::::"
+
+- Базы данных:
+    - pgAdmin:
+        icon: mdi-database
+        description: PostgreSQL Admin
+        href: "https://pgadmin.gv-services.net.ru/login?next=/browser/"
+
+- Приложения:
+    - Planka:
+        icon: mdi-kanban
+        description: Project Management
+        href: http://77.95.203.136:13004/
+
+    - Vaultwarden:
+        icon: mdi-lock
+        description: Password Manager
+        href: https://v.gv-services.net.ru/

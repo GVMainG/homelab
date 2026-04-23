@@ -1,0 +1,28 @@
+- AI:
+    - ChatGPT:
+        - abbr: GP
+          icon: mdi-robot
+          href: https://chatgpt.com/
+
+    - Claude:
+        - abbr: CL
+          icon: mdi-robot-outline
+          href: https://claude.ai/new
+
+- Инструменты:
+    - Я.Переводчик:
+        - abbr: ЯП
+          icon: mdi-translate
+          href: https://translate.yandex.ru/
+
+- Разработка:
+    - GitHub:
+        - abbr: GH
+          icon: mdi-github
+          href: https://github.com/
+
+- Облако:
+    - Timeweb:
+        - abbr: TW
+          icon: mdi-cloud
+          href: https://timeweb.cloud/my/projects/1189439

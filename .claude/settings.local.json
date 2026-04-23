@@ -95,7 +95,9 @@
       "WebFetch(domain:docs.planka.cloud)",
       "Bash(curl -s \"https://raw.githubusercontent.com/plankanban/planka/master/docker-compose.yml\")",
       "Bash(git commit -m 'feat\\(planka\\): исправил Docker image и конфигурацию Planka *)",
-      "Bash(python3)"
+      "Bash(python3)",
+      "Bash(docker compose *)",
+      "WebFetch(domain:gethomepage.dev)"
     ]
   }
 }

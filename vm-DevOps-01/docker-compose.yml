@@ -38,5 +38,30 @@ services:
       retries: 3
       start_period: 30s
 
+  # ── Homepage ───────────────────────────────────────────────────────────────
+  # Стартовая страница дашборда со ссылками на все сервисы.
+  # :3001 — веб-UI (http://VM_IP:3001)
+  # Конфиги: config/services.yml, config/bookmarks.yml, config/widgets.yml
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    volumes:
+      - homepage-config:/app/config            # конфиги сервисов, закладок, виджетов
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # для вывода статуса контейнеров
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      HOMEPAGE_ALLOWED_HOSTS: "192.168.1.39:3001,homepage.gv-services.net.ru"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
 volumes:
   dockhand-data:
+  homepage-config:
