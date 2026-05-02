@@ -1,0 +1,84 @@
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    ports:
+      - "3000:8080"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+    volumes:
+      - open-webui-data:/app/backend/data
+    depends_on:
+      - ollama
+
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ollama
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ollama-data:/root/.ollama
+
+  affine:
+    image: ghcr.io/toeverything/affine-self-hosted:stable
+    container_name: affine
+    restart: unless-stopped
+    ports:
+      - "3010:3010"
+    environment:
+      - AFFINE_SERVER_HTTPS=false
+      - AFFINE_SERVER_HOST=${AFFINE_SERVER_HOST:-0.0.0.0}
+      - AFFINE_SERVER_PORT=3010
+      - DATABASE_URL=postgresql://${AFFINE_DB_USER}:${AFFINE_DB_PASSWORD}@${AFFINE_DB_HOST}:${AFFINE_DB_PORT}/${AFFINE_DB_NAME}
+      - REDIS_SERVER_HOST=${AFFINE_REDIS_HOST:-redis}
+      - REDIS_SERVER_PORT=${AFFINE_REDIS_PORT:-6379}
+      - REDIS_SERVER_PASSWORD=${AFFINE_REDIS_PASSWORD:-}
+      - AFFINE_ADMIN_EMAIL=${AFFINE_ADMIN_EMAIL}
+      - AFFINE_ADMIN_PASSWORD=${AFFINE_ADMIN_PASSWORD}
+    volumes:
+      - affine-config:/root/.affine/config
+      - affine-storage:/root/.affine/storage
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: affine-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - affine-redis-data:/data
+
+  open-notebook:
+    image: lfnovo/open-notebook:latest
+    container_name: open-notebook
+    restart: unless-stopped
+    ports:
+      - "4110:4110"
+    environment:
+      - ORIGIN=${OPEN_NOTEBOOK_ORIGIN:-http://localhost:4110}
+      - SURREAL_URL=${OPEN_NOTEBOOK_SURREAL_URL:-ws://surrealdb:8000/rpc}
+      - SURREAL_NAMESPACE=${OPEN_NOTEBOOK_SURREAL_NAMESPACE:-open-notebook}
+      - SURREAL_DATABASE=${OPEN_NOTEBOOK_SURREAL_DATABASE:-open-notebook}
+      - SURREAL_USERNAME=${OPEN_NOTEBOOK_SURREAL_USERNAME:-root}
+      - SURREAL_PASSWORD=${OPEN_NOTEBOOK_SURREAL_PASSWORD:-root}
+      - AUTH_SECRET=${OPEN_NOTEBOOK_AUTH_SECRET}
+      - AUTH_TRUST_HOST=true
+    depends_on:
+      - surrealdb
+
+  surrealdb:
+    image: surrealdb/surrealdb:latest
+    container_name: open-notebook-surrealdb
+    restart: unless-stopped
+    command: start --user ${OPEN_NOTEBOOK_SURREAL_USERNAME:-root} --pass ${OPEN_NOTEBOOK_SURREAL_PASSWORD:-root} rocksdb:/data/surreal.db
+    volumes:
+      - open-notebook-surreal-data:/data
+
+volumes:
+  open-webui-data:
+  # ollama-data:
+  affine-config:
+  affine-storage:
+  affine-redis-data:
+  open-notebook-surreal-data:
